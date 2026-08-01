@@ -252,7 +252,7 @@ class Account(BaseEntity, ABC):
         return self._balance
 
     @property
-    def balance_amount(self) -> Decimal::
+    def balance_amount(self) -> Decimal:
         """
         Return the numeric balance amount.
         """

@@ -49,6 +49,20 @@ class CustomerRepository(
 
         super().__init__()
 
+    # ---------------------------------------------------------
+
+    @staticmethod
+    def _normalize(
+        value: str,
+    ) -> str:
+        """
+        Normalize text for case-insensitive comparisons.
+        """
+
+        return value.strip().upper()
+
+    # ---------------------------------------------------------
+    
     # ------------------------------------------------------------------
     # Customer Number
     # ------------------------------------------------------------------
@@ -56,6 +70,8 @@ class CustomerRepository(
     def find_by_customer_number(
         self,
         customer_number: str,
+        *,
+        active_only: bool = True,
     ) -> Customer | None:
         """
         Find a customer using the customer number.
@@ -67,8 +83,9 @@ class CustomerRepository(
 
         return self.find_first(
             lambda customer:
-            customer.customer_number
-            == customer_number
+            customer.customer_id
+            == customer_number,
+            active_only=active_only,
         )
 
     # ------------------------------------------------------------------
@@ -130,14 +147,14 @@ class CustomerRepository(
     # ------------------------------------------------------------------
     # Passport Number
     # ------------------------------------------------------------------
-
+    """ --- remove because it doesn't exist in the customer model
     def find_by_passport_number(
         self,
         passport_number: str,
     ) -> Customer | None:
-        """
+        
         Find a customer using the passport number.
-        """
+        
 
         passport_number = (
             passport_number.strip().upper()
@@ -148,20 +165,21 @@ class CustomerRepository(
             customer.passport_number
             == passport_number
         )
-
+     """
+        
 # PART 2
 
     # ------------------------------------------------------------------
     # Passport Number
     # ------------------------------------------------------------------
-
+    """ --- remove because it doesn't exist in the customer model
     def exists_passport_number(
         self,
         passport_number: str,
     ) -> bool:
-        """
+        
         Determine whether a passport number already exists.
-        """
+        
 
         return (
             self.find_by_passport_number(
@@ -169,7 +187,7 @@ class CustomerRepository(
             )
             is not None
         )
-
+    """
     # ------------------------------------------------------------------
     # Email Address
     # ------------------------------------------------------------------
@@ -221,7 +239,7 @@ class CustomerRepository(
 
         return self.find_first(
             lambda customer:
-            customer.mobile_number.strip()
+            customer.phone_number.strip()
             == mobile_number
         )
 
@@ -423,20 +441,21 @@ class CustomerRepository(
     ) -> list[Customer]:
         """
         Perform a case-insensitive search across common customer fields.
+        -- this was removed or text in self._normalize(customer.passport_number)
+        from below checks.
         """
 
         text = self._normalize(text)
 
         return self.find_where(
             lambda customer:
-                text in self._normalize(customer.customer_number)
+                text in self._normalize(customer.customer_id)
                 or text in self._normalize(customer.first_name)
                 or text in self._normalize(customer.last_name)
                 or text in self._normalize(customer.full_name)
                 or text in self._normalize(customer.email)
-                or text in self._normalize(customer.mobile_number)
+                or text in self._normalize(customer.phone_number)
                 or text in self._normalize(customer.national_id)
-                or text in self._normalize(customer.passport_number)
                 or text in self._normalize(customer.address.city)
                 or text in self._normalize(customer.address.country)
         )
@@ -502,6 +521,8 @@ class CustomerRepository(
     def get_or_raise(
         self,
         customer_number: str,
+        *,
+        active_only: bool = True,
     ) -> Customer:
         """
         Return the customer with the specified customer number.
@@ -513,7 +534,8 @@ class CustomerRepository(
         """
 
         customer = self.find_by_customer_number(
-            customer_number
+            customer_number,
+            active_only=active_only,
         )
 
         if customer is None:
@@ -541,7 +563,7 @@ class CustomerRepository(
         """
 
         if self.exists_customer_number(
-            customer.customer_number
+            customer.customer_id
         ):
             raise EntityAlreadyExistsError(
                 "Customer number already exists."
@@ -553,14 +575,15 @@ class CustomerRepository(
             raise EntityAlreadyExistsError(
                 "National ID already exists."
             )
-
+        
+        """ --- remove because it doesn't exist in the customer model
         if customer.passport_number and self.exists_passport_number(
             customer.passport_number
         ):
             raise EntityAlreadyExistsError(
                 "Passport number already exists."
             )
-
+        """
         if customer.email and self.exists_email(
             customer.email
         ):
@@ -568,8 +591,8 @@ class CustomerRepository(
                 "Email address already exists."
             )
 
-        if customer.mobile_number and self.exists_mobile_number(
-            customer.mobile_number
+        if customer.phone_number and self.exists_mobile_number(
+            customer.phone_number
         ):
             raise EntityAlreadyExistsError(
                 "Mobile number already exists."

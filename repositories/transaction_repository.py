@@ -223,17 +223,29 @@ class TransactionRepository(
         )
 
     # ------------------------------------------------------------------
-
+    """
     def transfers(
         self,
     ) -> list[Transaction]:
-        """
-        Return all transfer transactions.
-        """
+       
+        # Return all transfer transactions.
+       
 
         return self.find_by_type(
             TransactionType.TRANSFER
         )
+    """
+
+    def transfers(self) -> list[Transaction]:
+        return self.find_where(
+            lambda transaction:
+            transaction.transaction_type
+            in (
+                TransactionType.INTERNAL_TRANSFER,
+                TransactionType.EXTERNAL_TRANSFER,
+            )
+        )
+
 
     # ------------------------------------------------------------------
     # Transaction Status

@@ -27,6 +27,22 @@ from exceptions import (
     EntityNotFoundError,
 )
 
+from models.current_account import CurrentAccount
+from models.savings_account import SavingsAccount
+from models.time_deposit_account import TimeDepositAccount
+
+# from utils.constants import AccountType
+from utils.constants import (
+    AccountStatus,
+    AccountType,
+    Gender,
+)
+
+import csv
+
+from decimal import Decimal
+from datetime import date
+
 class AccountRepository(
     BaseRepository[Account],
 ):
@@ -108,29 +124,29 @@ class AccountRepository(
 
     def find_by_customer(
         self,
-        customer_number: str,
+        customer_id: str,
     ) -> list[Account]:
         """
         Return all accounts belonging to the specified customer.
         """
 
-        customer_number = self._normalize(
-            customer_number
+        customer_id = self._normalize(
+            customer_id
         )
 
         return self.find_where(
             lambda account:
             self._normalize(
-                account.customer_number
+                account.customer_id
             )
-            == customer_number
+            == customer_id
         )
 
     # ------------------------------------------------------------------
 
     def customer_has_accounts(
         self,
-        customer_number: str,
+        customer_id: str,
     ) -> bool:
         """
         Determine whether the customer owns any accounts.
@@ -139,21 +155,13 @@ class AccountRepository(
         return (
             len(
                 self.find_by_customer(
-                    customer_number
+                    customer_id
                 )
             )
             > 0
         )
 
-# PART 2
-
-from models.current_account import CurrentAccount
-from models.savings_account import SavingsAccount
-from models.time_deposit_account import TimeDepositAccount
-
-from utils.constants import AccountType
-
-import csv
+    # PART 2
 
     # ------------------------------------------------------------------
     # Persistence
@@ -321,7 +329,7 @@ import csv
 
         return self.find_where(
             lambda account:
-            account.account_status == account_status
+            account.status == account_status
         )
 
     # ------------------------------------------------------------------
@@ -499,9 +507,6 @@ import csv
 
 # PART 4
 
-from decimal import Decimal
-from datetime import date
-
     # ------------------------------------------------------------------
     # Balance Queries
     # ------------------------------------------------------------------
@@ -548,7 +553,7 @@ from datetime import date
 
     def customer_account_count(
         self,
-        customer_number: str,
+        customer_id: str,
     ) -> int:
         """
         Return the number of accounts owned by a customer.
@@ -556,7 +561,7 @@ from datetime import date
 
         return len(
             self.find_by_customer(
-                customer_number
+                customer_id
             )
         )
 
@@ -564,14 +569,14 @@ from datetime import date
 
     def customer_total_balance(
         self,
-        customer_number: str,
+        customer_id: str,
     ) -> Decimal:
         """
         Return the customer's total balance across all accounts.
         """
 
         accounts = self.find_by_customer(
-            customer_number
+            customer_id
         )
 
         return sum(
@@ -586,7 +591,7 @@ from datetime import date
 
     def customer_accounts_by_type(
         self,
-        customer_number: str,
+        customer_id: str,
         account_type: AccountType,
     ) -> list[Account]:
         """
@@ -596,7 +601,7 @@ from datetime import date
         return [
             account
             for account in self.find_by_customer(
-                customer_number
+                customer_id
             )
             if account.account_type
             == account_type

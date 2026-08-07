@@ -19,6 +19,8 @@ from abc import ABC
 from pathlib import Path
 from typing import Generic, TypeVar
 
+from uuid import UUID
+
 from models.base_entity import BaseEntity
 
 from exceptions import (
@@ -101,8 +103,6 @@ class BaseRepository(
         return self.count == 0
 
 # PART 2
-
-from uuid import UUID
 
     # ------------------------------------------------------------------
     # Lookup Operations
@@ -192,6 +192,10 @@ from uuid import UUID
         """
         Update an existing entity.
         """
+        # print(entity.entity_id)
+        # print(id(entity))
+        # print(self._entities.keys())
+        # print(entity.entity_id in self._entities)
 
         if not self.exists(entity.entity_id):
 

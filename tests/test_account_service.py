@@ -1,2559 +1,1001 @@
 """
-============================================================
-Account Service Tests
-Part 1
-------------------------------------------------------------
-Coverage
+==============================================================================
+Banking Management System (BMS)
 
-• Service construction
-• Dependency injection
-• Savings account opening
-• Current account opening
-• Time deposit opening
-• Duplicate account prevention
-• Customer validation
-============================================================
+File        : test_account_service.py
+Description : Unit tests for AccountService.
+
+These tests exercise the current AccountService contract without requiring
+changes to the production architecture. Repository dependencies are mocked so
+that the service layer is tested in isolation.
+==============================================================================
 """
+
+from decimal import Decimal
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
-from services.account_service import AccountService
-
-from repositories.account_repository import AccountRepository
-from repositories.customer_repository import CustomerRepository
-
-from models.customer import Customer
-from models.savings_account import SavingsAccount
-from models.current_account import CurrentAccount
-from models.time_deposit_account import TimeDepositAccount
-
-from models.value_objects.address import Address
-from models.value_objects.email import EmailAddress
-from models.value_objects.money import Money
-from models.value_objects.phone import PhoneNumber
-
-from exceptions.banking_exceptions import (
-    DuplicateAccountError,
-    CustomerNotFoundError,
+from exceptions import (
+    EntityAlreadyExistsError,
     ValidationError,
 )
+from models.value_objects.money import Money
+from services.account_service import AccountService
 
-# ============================================================
-# Fixtures
-# ============================================================
 
-@pytest.fixture
-def customer_repository(tmp_path):
+ACCOUNT_NUMBER = "SA-100001"
+SECOND_ACCOUNT_NUMBER = "SA-100002"
+CUSTOMER_NUMBER = "CUST000001"
 
-    return CustomerRepository(
-        storage_path=tmp_path / "customers.csv"
+
+def money(amount: str, currency: str = "SAR") -> Money:
+    """Create a Money value for service-level tests."""
+    return Money(
+        amount=Decimal(amount),
+        currency=currency,
     )
 
 
-@pytest.fixture
-def account_repository(tmp_path):
+def make_account(
+    account_number: str = ACCOUNT_NUMBER,
+    customer_number: str = CUSTOMER_NUMBER,
+    balance: str = "1000.00",
+    currency: str = "SAR",
+    active: bool = True,
+    frozen: bool = False,
+    deleted: bool = False,
+):
+    """Create a lightweight account test double."""
+    account = MagicMock()
+    account.account_number = account_number
+    account.customer_number = customer_number
+    account.balance = money(balance, currency)
+    account.currency = currency
+    account.is_active = active
+    account.is_frozen = frozen
+    account.is_deleted = deleted
+    account.created_on = "2026-08-08"
+    account.entity_id = f"ENTITY-{account_number}"
+    account.account_type = SimpleNamespace(value="Savings")
+    return account
 
-    return AccountRepository(
-        storage_path=tmp_path / "accounts.csv"
-    )
+
+@pytest.fixture
+def account_repository():
+    repository = MagicMock()
+    repository.auto_save = True
+    repository.count = 0
+    repository.__len__.return_value = 0
+    repository.__iter__.return_value = iter(())
+    repository.statistics.return_value = {"count": 0}
+    return repository
+
+
+@pytest.fixture
+def customer_repository():
+    return MagicMock()
+
+
+@pytest.fixture
+def transaction_repository():
+    return MagicMock()
 
 
 @pytest.fixture
 def service(
     account_repository,
     customer_repository,
+    transaction_repository,
 ):
-
     return AccountService(
         account_repository=account_repository,
         customer_repository=customer_repository,
+        transaction_repository=transaction_repository,
     )
 
 
 @pytest.fixture
-def customer(customer_repository):
+def account():
+    return make_account()
 
-    customer = Customer(
 
-        customer_id="CUST000001",
-
-        first_name="John",
-
-        middle_name="A",
-
-        last_name="Smith",
-
-        national_id="1234567890",
-
-        email=EmailAddress("john@test.com"),
-
-        phone=PhoneNumber("+966501234567"),
-
-        address=Address(
-
-            street="King Road",
-
-            city="Riyadh",
-
-            state="Riyadh",
-
-            postal_code="12345",
-
-            country="Saudi Arabia",
-
-        ),
-    )
-
-    customer_repository.add(customer)
-
+@pytest.fixture
+def customer():
+    customer = MagicMock()
+    customer.customer_id = CUSTOMER_NUMBER
+    customer.is_active = True
+    customer.is_deleted = False
     return customer
 
-# ============================================================
-# Service Construction
-# ============================================================
 
-def test_service_created(service):
-
-    assert service is not None
+# ---------------------------------------------------------------------------
+# Construction and lookup
+# ---------------------------------------------------------------------------
 
 
-def test_account_repository_injected(
+def test_constructor_wires_repositories(
+    service,
+    account_repository,
+    customer_repository,
+    transaction_repository,
+):
+    assert service.repository is account_repository
+    assert service._customer_repository is customer_repository
+    assert service._transaction_repository is transaction_repository
+
+
+def test_get_account_delegates_to_repository(
+    service,
+    account_repository,
+    account,
+):
+    account_repository.get_or_raise.return_value = account
+
+    result = service.get_account(ACCOUNT_NUMBER)
+
+    assert result is account
+    account_repository.get_or_raise.assert_called_once_with(ACCOUNT_NUMBER)
+
+
+def test_account_exists_delegates_to_repository(
     service,
     account_repository,
 ):
+    account_repository.account_exists.return_value = True
 
-    assert service.account_repository is account_repository
+    assert service.account_exists(ACCOUNT_NUMBER) is True
+    account_repository.account_exists.assert_called_once_with(ACCOUNT_NUMBER)
 
 
-def test_customer_repository_injected(
+def test_get_customer_delegates_to_customer_repository(
     service,
     customer_repository,
-):
-
-    assert service.customer_repository is customer_repository
-
-
-def test_empty_repository(service):
-
-    assert service.account_count() == 0
-
-# ============================================================
-# Savings Account Opening
-# ============================================================
-
-def test_open_savings_account(
-    service,
     customer,
 ):
+    customer_repository.get_or_raise.return_value = customer
 
-    account = service.open_savings_account(
+    result = service.get_customer(CUSTOMER_NUMBER)
 
-        customer_id=customer.customer_id,
-
-        account_number="SA100001",
-
-        opening_balance=Money("1000"),
-
-    )
-
-    assert isinstance(
-        account,
-        SavingsAccount,
-    )
-
-    assert service.account_count() == 1
+    assert result is customer
+    customer_repository.get_or_raise.assert_called_once_with(CUSTOMER_NUMBER)
 
 
-def test_open_savings_initial_balance(
+def test_customer_is_eligible_when_customer_is_active_and_not_deleted(
     service,
+    customer_repository,
     customer,
 ):
+    customer_repository.get_or_raise.return_value = customer
 
-    account = service.open_savings_account(
+    assert service.customer_is_eligible(CUSTOMER_NUMBER) is True
 
-        customer.customer_id,
 
-        "SA100002",
-
-        Money("5000"),
-
-    )
-
-    assert account.balance == Money("5000")
-
-# ============================================================
-# Current Account Opening
-# ============================================================
-
-def test_open_current_account(
+def test_customer_is_ineligible_when_customer_is_inactive(
     service,
+    customer_repository,
     customer,
 ):
+    customer.is_active = False
+    customer_repository.get_or_raise.return_value = customer
 
-    account = service.open_current_account(
-
-        customer.customer_id,
-
-        "CA100001",
-
-        Money("2000"),
-
-    )
-
-    assert isinstance(
-        account,
-        CurrentAccount,
-    )
+    assert service.customer_is_eligible(CUSTOMER_NUMBER) is False
 
 
-def test_current_account_registered(
+def test_customer_is_ineligible_when_customer_is_deleted(
     service,
+    customer_repository,
     customer,
 ):
+    customer.is_deleted = True
+    customer_repository.get_or_raise.return_value = customer
 
-    account = service.open_current_account(
+    assert service.customer_is_eligible(CUSTOMER_NUMBER) is False
 
-        customer.customer_id,
 
-        "CA100002",
-
-        Money("1500"),
-
-    )
-
-    stored = service.get_account(
-        account.account_number
-    )
-
-    assert stored == account
-
-# ============================================================
-# Current Account Opening
-# ============================================================
-
-def test_open_current_account(
+def test_all_accounts_returns_repository_accounts(
     service,
-    customer,
+    account_repository,
+    account,
 ):
+    account_repository.__iter__.return_value = iter([account])
 
-    account = service.open_current_account(
+    result = service.all_accounts()
 
-        customer.customer_id,
-
-        "CA100001",
-
-        Money("2000"),
-
-    )
-
-    assert isinstance(
-        account,
-        CurrentAccount,
-    )
+    assert result == [account]
 
 
-def test_current_account_registered(
+# ---------------------------------------------------------------------------
+# Account opening and validation
+# ---------------------------------------------------------------------------
+
+
+def test_open_account_adds_account(
     service,
-    customer,
+    account_repository,
+    customer_repository,
+    account,
 ):
-
-    account = service.open_current_account(
-
-        customer.customer_id,
-
-        "CA100002",
-
-        Money("1500"),
-
+    customer_repository.get_or_raise.return_value = SimpleNamespace(
+        is_active=True,
+        is_deleted=False,
     )
+    account_repository.account_exists.return_value = False
 
-    stored = service.get_account(
-        account.account_number
-    )
+    result = service.open_account(account)
 
-    assert stored == account
+    assert result is account
+    account_repository.add_account.assert_called_once_with(account)
 
-# ============================================================
-# Duplicate Accounts
-# ============================================================
 
-def test_duplicate_account_number(
+def test_open_account_rejects_ineligible_customer(
     service,
-    customer,
+    account_repository,
+    customer_repository,
+    account,
 ):
-
-    service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA999999",
-
-        Money("1000"),
-
+    customer_repository.get_or_raise.return_value = SimpleNamespace(
+        is_active=False,
+        is_deleted=False,
     )
 
-    with pytest.raises(
-        DuplicateAccountError
-    ):
+    with pytest.raises(ValidationError, match="not eligible"):
+        service.open_account(account)
 
-        service.open_savings_account(
+    account_repository.add_account.assert_not_called()
 
-            customer.customer_id,
 
-            "SA999999",
-
-            Money("500"),
-
-        )
-
-# ============================================================
-# Duplicate Accounts
-# ============================================================
-
-def test_duplicate_account_number(
+def test_open_account_rejects_duplicate_account(
     service,
-    customer,
+    account_repository,
+    customer_repository,
+    account,
 ):
-
-    service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA999999",
-
-        Money("1000"),
-
+    customer_repository.get_or_raise.return_value = SimpleNamespace(
+        is_active=True,
+        is_deleted=False,
     )
+    account_repository.account_exists.return_value = True
 
-    with pytest.raises(
-        DuplicateAccountError
-    ):
+    with pytest.raises(EntityAlreadyExistsError, match="already exists"):
+        service.open_account(account)
 
-        service.open_savings_account(
-
-            customer.customer_id,
-
-            "SA999999",
-
-            Money("500"),
-
-        )
+    account_repository.add_account.assert_not_called()
 
 
-# PART 2
-
-# ============================================================
-# Deposit Operations
-# ============================================================
-
-def test_deposit(
+def test_open_account_with_positive_initial_deposit_calls_deposit(
     service,
-    customer,
+    account_repository,
+    customer_repository,
+    account,
+    monkeypatch,
 ):
+    customer_repository.get_or_raise.return_value = SimpleNamespace(
+        is_active=True,
+        is_deleted=False,
+    )
+    account_repository.account_exists.return_value = False
+    deposit = money("250.00")
+    deposit_mock = MagicMock(return_value=account)
+    monkeypatch.setattr(service, "deposit", deposit_mock)
 
-    account = service.open_savings_account(
+    result = service.open_account(account, initial_deposit=deposit)
 
-        customer.customer_id,
-
-        "SA100001",
-
-        Money("1000"),
-
+    assert result is account
+    deposit_mock.assert_called_once_with(
+        ACCOUNT_NUMBER,
+        deposit,
+        description="Initial Deposit",
     )
 
-    service.deposit(
 
-        account.account_number,
-
-        Money("500"),
-
-    )
-
-    updated = service.get_account(
-        account.account_number
-    )
-
-    assert updated.balance == Money("1500")
-
-
-def test_multiple_deposits(
+def test_open_account_does_not_deposit_zero_initial_amount(
     service,
-    customer,
+    account_repository,
+    customer_repository,
+    account,
+    monkeypatch,
 ):
-
-    account = service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA100002",
-
-        Money("1000"),
-
+    customer_repository.get_or_raise.return_value = SimpleNamespace(
+        is_active=True,
+        is_deleted=False,
     )
+    account_repository.account_exists.return_value = False
+    deposit_mock = MagicMock()
+    monkeypatch.setattr(service, "deposit", deposit_mock)
 
-    service.deposit(
-        account.account_number,
-        Money("100"),
-    )
+    service.open_account(account, initial_deposit=money("0.00"))
 
-    service.deposit(
-        account.account_number,
-        Money("200"),
-    )
-
-    service.deposit(
-        account.account_number,
-        Money("300"),
-    )
-
-    assert (
-        service.get_account(
-            account.account_number
-        ).balance
-        == Money("1600")
-    )
+    deposit_mock.assert_not_called()
 
 
-def test_deposit_zero_amount(
+def test_validate_account_returns_active_account(
     service,
-    customer,
+    account_repository,
+    account,
 ):
+    account_repository.get_or_raise.return_value = account
 
-    account = service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA100003",
-
-        Money("1000"),
-
-    )
-
-    with pytest.raises(
-        ValidationError
-    ):
-
-        service.deposit(
-
-            account.account_number,
-
-            Money.zero(),
-
-        )
+    assert service.validate_account(ACCOUNT_NUMBER) is account
 
 
-def test_deposit_negative_amount(
+def test_validate_account_rejects_inactive_account(
     service,
-    customer,
+    account_repository,
+    account,
 ):
+    account.is_active = False
+    account_repository.get_or_raise.return_value = account
 
-    account = service.open_savings_account(
+    with pytest.raises(ValidationError, match="inactive"):
+        service.validate_account(ACCOUNT_NUMBER)
 
-        customer.customer_id,
 
-        "SA100004",
-
-        Money("1000"),
-
-    )
-
-    with pytest.raises(
-        ValidationError
-    ):
-
-        service.deposit(
-
-            account.account_number,
-
-            Money("-100"),
-
-        )
-
-# ============================================================
-# Withdrawal Operations
-# ============================================================
-
-def test_withdraw(
+def test_validate_account_rejects_closed_account(
     service,
-    customer,
+    account_repository,
+    account,
 ):
+    account.is_deleted = True
+    account_repository.get_or_raise.return_value = account
 
-    account = service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA200001",
-
-        Money("1000"),
-
-    )
-
-    service.withdraw(
-
-        account.account_number,
-
-        Money("250"),
-
-    )
-
-    assert (
-
-        service.get_account(
-
-            account.account_number
-
-        ).balance
-
-        == Money("750")
-
-    )
+    with pytest.raises(ValidationError, match="closed"):
+        service.validate_account(ACCOUNT_NUMBER)
 
 
-def test_multiple_withdrawals(
+# ---------------------------------------------------------------------------
+# Customer account queries
+# ---------------------------------------------------------------------------
+
+
+def test_customer_accounts_delegates_to_repository(
     service,
-    customer,
+    account_repository,
+    account,
 ):
+    account_repository.find_by_customer.return_value = [account]
 
-    account = service.open_savings_account(
+    result = service.customer_accounts(CUSTOMER_NUMBER)
 
-        customer.customer_id,
+    assert result == [account]
+    account_repository.find_by_customer.assert_called_once_with(CUSTOMER_NUMBER)
 
-        "SA200002",
 
-        Money("2000"),
-
-    )
-
-    service.withdraw(
-        account.account_number,
-        Money("100"),
-    )
-
-    service.withdraw(
-        account.account_number,
-        Money("300"),
-    )
-
-    service.withdraw(
-        account.account_number,
-        Money("500"),
-    )
-
-    assert (
-
-        service.get_account(
-
-            account.account_number
-
-        ).balance
-
-        == Money("1100")
-
-    )
-
-# ============================================================
-# Insufficient Funds
-# ============================================================
-
-def test_withdraw_more_than_balance(
+def test_customer_account_count_returns_number_of_accounts(
     service,
-    customer,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "customer_accounts", lambda _: [1, 2, 3])
 
-    account = service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA300001",
-
-        Money("500"),
-
-    )
-
-    with pytest.raises(
-
-        ValueError
-
-    ):
-
-        service.withdraw(
-
-            account.account_number,
-
-            Money("600"),
-
-        )
+    assert service.customer_account_count(CUSTOMER_NUMBER) == 3
 
 
-def test_withdraw_entire_balance(
+def test_customer_has_accounts_true_when_customer_owns_accounts(
     service,
-    customer,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "customer_account_count", lambda _: 1)
 
-    account = service.open_savings_account(
+    assert service.customer_has_accounts(CUSTOMER_NUMBER) is True
 
-        customer.customer_id,
 
-        "SA300002",
-
-        Money("500"),
-
-    )
-
-    service.withdraw(
-
-        account.account_number,
-
-        Money("500"),
-
-    )
-
-    assert (
-
-        service.get_account(
-
-            account.account_number
-
-        ).balance
-
-        == Money.zero()
-
-    )
-
-# ============================================================
-# Invalid Withdrawals
-# ============================================================
-
-def test_withdraw_zero_amount(
+def test_customer_has_accounts_false_when_customer_has_no_accounts(
     service,
-    customer,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "customer_account_count", lambda _: 0)
 
-    account = service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA400001",
-
-        Money("1000"),
-
-    )
-
-    with pytest.raises(
-        ValidationError
-    ):
-
-        service.withdraw(
-
-            account.account_number,
-
-            Money.zero(),
-
-        )
+    assert service.customer_has_accounts(CUSTOMER_NUMBER) is False
 
 
-def test_withdraw_negative_amount(
+# ---------------------------------------------------------------------------
+# Internal balance operations
+# ---------------------------------------------------------------------------
+
+
+def test_credit_account_deposits_positive_amount(
     service,
-    customer,
+    account_repository,
+    account,
 ):
+    amount = money("100.00")
 
-    account = service.open_savings_account(
+    service._credit_account(account, amount)
 
-        customer.customer_id,
-
-        "SA400002",
-
-        Money("1000"),
-
-    )
-
-    with pytest.raises(
-        ValidationError
-    ):
-
-        service.withdraw(
-
-            account.account_number,
-
-            Money("-10"),
-
-        )
+    account.deposit.assert_called_once_with(amount)
+    account_repository.save_account.assert_called_once_with(account)
 
 
-def test_withdraw_unknown_account(
+def test_credit_account_rejects_non_positive_amount(
     service,
+    account,
 ):
+    with pytest.raises(ValidationError, match="greater than zero"):
+        service._credit_account(account, money("0.00"))
 
-    with pytest.raises(
+    account.deposit.assert_not_called()
 
-        KeyError
 
-    ):
-
-        service.withdraw(
-
-            "UNKNOWN",
-
-            Money("100"),
-
-        )
-
-# ============================================================
-# Balance Integrity
-# ============================================================
-
-def test_balance_after_sequence(
+def test_debit_account_withdraws_positive_amount(
     service,
-    customer,
+    account_repository,
+    account,
 ):
+    amount = money("100.00")
 
-    account = service.open_savings_account(
+    service._debit_account(account, amount)
 
-        customer.customer_id,
-
-        "SA500001",
-
-        Money("1000"),
-
-    )
-
-    service.deposit(
-
-        account.account_number,
-
-        Money("300"),
-
-    )
-
-    service.withdraw(
-
-        account.account_number,
-
-        Money("100"),
-
-    )
-
-    service.deposit(
-
-        account.account_number,
-
-        Money("200"),
-
-    )
-
-    service.withdraw(
-
-        account.account_number,
-
-        Money("50"),
-
-    )
-
-    assert (
-
-        service.get_account(
-
-            account.account_number
-
-        ).balance
-
-        == Money("1350")
-
-    )
+    account.withdraw.assert_called_once_with(amount)
+    account_repository.save_account.assert_called_once_with(account)
 
 
-def test_balance_never_negative(
+def test_debit_account_rejects_non_positive_amount(
     service,
-    customer,
+    account,
 ):
+    with pytest.raises(ValidationError, match="greater than zero"):
+        service._debit_account(account, money("0.00"))
 
-    account = service.open_savings_account(
+    account.withdraw.assert_not_called()
 
-        customer.customer_id,
 
-        "SA500002",
+# ---------------------------------------------------------------------------
+# Deposit, withdrawal, and transfer
+# ---------------------------------------------------------------------------
 
-        Money("100"),
 
-    )
-
-    with pytest.raises(
-        ValueError
-    ):
-
-        service.withdraw(
-
-            account.account_number,
-
-            Money("200"),
-
-        )
-
-    assert (
-
-        service.get_account(
-
-            account.account_number
-
-        ).balance
-
-        == Money("100")
-
-    )
-
-# ============================================================
-# Repository Synchronization
-# ============================================================
-
-def test_repository_updated_after_deposit(
+def test_deposit_validates_account_and_credits_it(
     service,
-    customer,
+    account,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "validate_account", lambda _: account)
+    amount = money("125.00")
 
-    account = service.open_savings_account(
+    result = service.deposit(ACCOUNT_NUMBER, amount)
 
-        customer.customer_id,
-
-        "SA600001",
-
-        Money("1000"),
-
-    )
-
-    service.deposit(
-
-        account.account_number,
-
-        Money("500"),
-
-    )
-
-    repository_account = service.account_repository.get(
-
-        account.account_number
-
-    )
-
-    assert repository_account.balance == Money("1500")
+    assert result is account
+    account.deposit.assert_called_once_with(amount)
 
 
-def test_repository_updated_after_withdrawal(
+def test_withdraw_validates_account_and_debits_it(
     service,
-    customer,
+    account,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "validate_account", lambda _: account)
+    amount = money("125.00")
 
-    account = service.open_savings_account(
+    result = service.withdraw(ACCOUNT_NUMBER, amount)
 
-        customer.customer_id,
+    assert result is account
+    account.withdraw.assert_called_once_with(amount)
 
-        "SA600002",
 
-        Money("1000"),
-
-    )
-
-    service.withdraw(
-
-        account.account_number,
-
-        Money("200"),
-
-    )
-
-    repository_account = service.account_repository.get(
-
-        account.account_number
-
-    )
-
-    assert repository_account.balance == Money("800")
-
-# PART 3
-
-# ============================================================
-# Transfer Fixtures
-# ============================================================
-
-@pytest.fixture
-def source_account(
+def test_transfer_moves_amount_between_two_accounts(
     service,
-    customer,
+    account_repository,
+    monkeypatch,
 ):
+    source = make_account(ACCOUNT_NUMBER, balance="1000.00")
+    destination = make_account(SECOND_ACCOUNT_NUMBER, balance="500.00")
+    accounts = {
+        ACCOUNT_NUMBER: source,
+        SECOND_ACCOUNT_NUMBER: destination,
+    }
+    monkeypatch.setattr(service, "validate_account", lambda n: accounts[n])
+    amount = money("200.00")
 
-    return service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA700001",
-
-        Money("5000"),
-
+    result = service.transfer(
+        ACCOUNT_NUMBER,
+        SECOND_ACCOUNT_NUMBER,
+        amount,
     )
 
+    assert result == (source, destination)
+    source.withdraw.assert_called_once_with(amount)
+    destination.deposit.assert_called_once_with(amount)
+    assert account_repository.save_account.call_count == 4
 
-@pytest.fixture
-def destination_account(
+
+def test_transfer_rejects_same_source_and_destination(
     service,
-    customer,
+    account,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "validate_account", lambda _: account)
 
-    return service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA700002",
-
-        Money("1000"),
-
-    )
-
-# ============================================================
-# Successful Transfers
-# ============================================================
-
-def test_transfer_between_accounts(
-    service,
-    source_account,
-    destination_account,
-):
-
-    service.transfer(
-
-        source_account.account_number,
-
-        destination_account.account_number,
-
-        Money("500"),
-
-    )
-
-    source = service.get_account(
-        source_account.account_number
-    )
-
-    destination = service.get_account(
-        destination_account.account_number
-    )
-
-    assert source.balance == Money("4500")
-
-    assert destination.balance == Money("1500")
-
-
-def test_multiple_transfers(
-    service,
-    source_account,
-    destination_account,
-):
-
-    service.transfer(
-        source_account.account_number,
-        destination_account.account_number,
-        Money("100"),
-    )
-
-    service.transfer(
-        source_account.account_number,
-        destination_account.account_number,
-        Money("200"),
-    )
-
-    service.transfer(
-        source_account.account_number,
-        destination_account.account_number,
-        Money("300"),
-    )
-
-    assert (
-        service.get_account(
-            source_account.account_number
-        ).balance
-        == Money("4400")
-    )
-
-    assert (
-        service.get_account(
-            destination_account.account_number
-        ).balance
-        == Money("1600")
-    )
-
-# ============================================================
-# Invalid Transfers
-# ============================================================
-
-def test_transfer_zero_amount(
-    service,
-    source_account,
-    destination_account,
-):
-
-    with pytest.raises(
-        ValidationError
-    ):
-
+    with pytest.raises(ValidationError, match="different"):
         service.transfer(
-
-            source_account.account_number,
-
-            destination_account.account_number,
-
-            Money.zero(),
-
+            ACCOUNT_NUMBER,
+            ACCOUNT_NUMBER,
+            money("100.00"),
         )
 
 
-def test_transfer_negative_amount(
+def test_transfer_rejects_non_positive_amount(
     service,
-    source_account,
-    destination_account,
+    account,
+    monkeypatch,
 ):
+    other = make_account(SECOND_ACCOUNT_NUMBER)
+    monkeypatch.setattr(
+        service,
+        "validate_account",
+        lambda n: account if n == ACCOUNT_NUMBER else other,
+    )
 
-    with pytest.raises(
-        ValidationError
-    ):
-
+    with pytest.raises(ValidationError, match="greater than zero"):
         service.transfer(
-
-            source_account.account_number,
-
-            destination_account.account_number,
-
-            Money("-100"),
-
+            ACCOUNT_NUMBER,
+            SECOND_ACCOUNT_NUMBER,
+            money("0.00"),
         )
 
 
-def test_transfer_to_same_account(
+def test_transfer_rejects_cross_currency_transfer(
     service,
-    source_account,
+    monkeypatch,
 ):
+    source = make_account(ACCOUNT_NUMBER, currency="SAR")
+    destination = make_account(SECOND_ACCOUNT_NUMBER, currency="USD")
+    monkeypatch.setattr(
+        service,
+        "validate_account",
+        lambda n: source if n == ACCOUNT_NUMBER else destination,
+    )
 
-    with pytest.raises(
-        ValidationError
-    ):
-
+    with pytest.raises(ValidationError, match="Cross-currency"):
         service.transfer(
-
-            source_account.account_number,
-
-            source_account.account_number,
-
-            Money("100"),
-
+            ACCOUNT_NUMBER,
+            SECOND_ACCOUNT_NUMBER,
+            money("100.00", "SAR"),
         )
 
-# ============================================================
-# Unknown Accounts
-# ============================================================
 
-def test_transfer_unknown_source(
+# ---------------------------------------------------------------------------
+# Balance queries and lifecycle
+# ---------------------------------------------------------------------------
+
+
+def test_balance_returns_account_balance(
     service,
-    destination_account,
+    account,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "validate_account", lambda _: account)
 
+    assert service.balance(ACCOUNT_NUMBER) == account.balance
+
+
+def test_available_balance_returns_ledger_balance(
+    service,
+    account,
+    monkeypatch,
+):
+    monkeypatch.setattr(service, "validate_account", lambda _: account)
+
+    assert service.available_balance(ACCOUNT_NUMBER) == account.balance
+
+
+def test_has_sufficient_funds_true_when_balance_is_enough(
+    service,
+    account,
+    monkeypatch,
+):
+    monkeypatch.setattr(service, "validate_account", lambda _: account)
+
+    assert service.has_sufficient_funds(ACCOUNT_NUMBER, money("500.00")) is True
+
+
+def test_has_sufficient_funds_false_when_balance_is_insufficient(
+    service,
+    account,
+    monkeypatch,
+):
+    monkeypatch.setattr(service, "validate_account", lambda _: account)
+
+    assert service.has_sufficient_funds(ACCOUNT_NUMBER, money("1500.00")) is False
+
+
+def test_close_account_requires_zero_balance(
+    service,
+    account,
+    monkeypatch,
+):
+    monkeypatch.setattr(service, "validate_account", lambda _: account)
+
+    # with pytest.raises(ValidationError, match="zero balance"):
     with pytest.raises(
-        KeyError
+        ValidationError,
+        match="balance must be zero",
     ):
+        service.close_account(ACCOUNT_NUMBER)
 
-        service.transfer(
-
-            "UNKNOWN",
-
-            destination_account.account_number,
-
-            Money("100"),
-
-        )
+    account.close.assert_not_called()
 
 
-def test_transfer_unknown_destination(
+def test_close_account_closes_zero_balance_account(
     service,
-    source_account,
+    account_repository,
+    account,
+    monkeypatch,
 ):
+    account.balance = money("0.00")
+    monkeypatch.setattr(service, "validate_account", lambda _: account)
 
-    with pytest.raises(
-        KeyError
-    ):
+    result = service.close_account(ACCOUNT_NUMBER)
 
-        service.transfer(
+    assert result is account
+    account.close.assert_called_once_with()
+    account_repository.save_account.assert_called_once_with(account)
 
-            source_account.account_number,
 
-            "UNKNOWN",
-
-            Money("100"),
-
-        )
-
-# ============================================================
-# Insufficient Funds
-# ============================================================
-
-def test_transfer_insufficient_funds(
+def test_freeze_account_freezes_and_persists(
     service,
-    source_account,
-    destination_account,
+    account_repository,
+    account,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "validate_account", lambda _: account)
 
-    with pytest.raises(
-        ValueError
-    ):
+    result = service.freeze_account(ACCOUNT_NUMBER)
 
-        service.transfer(
-
-            source_account.account_number,
-
-            destination_account.account_number,
-
-            Money("10000"),
-
-        )
+    assert result is account
+    account.freeze.assert_called_once_with()
+    account_repository.save_account.assert_called_once_with(account)
 
 
-def test_failed_transfer_preserves_balances(
+def test_unfreeze_account_unfreezes_and_persists(
     service,
-    source_account,
-    destination_account,
+    account_repository,
+    account,
 ):
+    account_repository.get_or_raise.return_value = account
 
-    original_source = source_account.balance
+    result = service.unfreeze_account(ACCOUNT_NUMBER)
 
-    original_destination = destination_account.balance
+    assert result is account
+    account.unfreeze.assert_called_once_with()
+    account_repository.save_account.assert_called_once_with(account)
 
-    with pytest.raises(
-        ValueError
-    ):
 
-        service.transfer(
+# ---------------------------------------------------------------------------
+# Account queries and summaries
+# ---------------------------------------------------------------------------
 
-            source_account.account_number,
 
-            destination_account.account_number,
-
-            Money("999999"),
-
-        )
-
-    assert (
-
-        service.get_account(
-            source_account.account_number
-        ).balance
-
-        == original_source
-
-    )
-
-    assert (
-
-        service.get_account(
-            destination_account.account_number
-        ).balance
-
-        == original_destination
-
-    )
-
-# ============================================================
-# Atomicity
-# ============================================================
-
-def test_transfer_is_atomic(
+def test_accounts_for_customer_delegates_to_repository(
     service,
-    source_account,
-    destination_account,
+    account_repository,
+    account,
 ):
+    account_repository.find_by_customer.return_value = [account]
 
-    before_source = source_account.balance
+    assert service.accounts_for_customer(CUSTOMER_NUMBER) == [account]
 
-    before_destination = destination_account.balance
 
-    try:
-
-        service.transfer(
-
-            source_account.account_number,
-
-            destination_account.account_number,
-
-            Money("999999"),
-
-        )
-
-    except Exception:
-
-        pass
-
-    after_source = service.get_account(
-        source_account.account_number
-    ).balance
-
-    after_destination = service.get_account(
-        destination_account.account_number
-    ).balance
-
-    assert before_source == after_source
-
-    assert before_destination == after_destination
-
-# ============================================================
-# Repository Synchronization
-# ============================================================
-
-def test_transfer_updates_repository(
+def test_active_accounts_delegates_to_repository(
     service,
-    source_account,
-    destination_account,
+    account_repository,
+    account,
 ):
+    account_repository.find_active_accounts.return_value = [account]
 
-    service.transfer(
+    assert service.active_accounts() == [account]
 
-        source_account.account_number,
 
-        destination_account.account_number,
-
-        Money("250"),
-
-    )
-
-    source = service.account_repository.get(
-        source_account.account_number
-    )
-
-    destination = service.account_repository.get(
-        destination_account.account_number
-    )
-
-    assert source.balance == Money("4750")
-
-    assert destination.balance == Money("1250")
-
-# ============================================================
-# Sequential Transfers
-# ============================================================
-
-def test_many_small_transfers(
+def test_inactive_accounts_delegates_to_repository(
     service,
-    source_account,
-    destination_account,
+    account_repository,
+    account,
 ):
+    account_repository.find_inactive_accounts.return_value = [account]
 
-    for _ in range(20):
+    assert service.inactive_accounts() == [account]
 
-        service.transfer(
 
-            source_account.account_number,
-
-            destination_account.account_number,
-
-            Money("10"),
-
-        )
-
-    assert (
-
-        service.get_account(
-            source_account.account_number
-        ).balance
-
-        == Money("4800")
-
-    )
-
-    assert (
-
-        service.get_account(
-            destination_account.account_number
-        ).balance
-
-        == Money("1200")
-
-    )
-
-# PART 4
-
-# ============================================================
-# Savings Interest
-# ============================================================
-
-def test_apply_interest(
+def test_account_summary_returns_expected_fields(
     service,
-    customer,
+    account,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "get_account", lambda _: account)
 
-    account = service.open_savings_account(
+    result = service.account_summary(ACCOUNT_NUMBER)
 
-        customer.customer_id,
-
-        "SA800001",
-
-        Money("10000"),
-
-    )
-
-    original = account.balance
-
-    service.apply_interest(
-        account.account_number
-    )
-
-    updated = service.get_account(
-        account.account_number
-    )
-
-    assert updated.balance > original
+    assert result == {
+        "account_number": ACCOUNT_NUMBER,
+        "customer_number": CUSTOMER_NUMBER,
+        "account_type": "Savings",
+        "currency": "SAR",
+        "balance": account.balance,
+        "active": account.is_active,
+        "frozen": account.is_frozen,
+        "closed": account.is_deleted,
+        "created_on": account.created_on,
+    }
 
 
-def test_interest_never_decreases_balance(
+def test_account_count_uses_entity_count(
     service,
-    customer,
+    account_repository,
 ):
+    account_repository.__len__.return_value = 3
 
-    account = service.open_savings_account(
+    assert service.account_count() == 3
 
-        customer.customer_id,
 
-        "SA800002",
-
-        Money("5000"),
-
-    )
-
-    before = account.balance
-
-    service.apply_interest(
-        account.account_number
-    )
-
-    after = service.get_account(
-        account.account_number
-    ).balance
-
-    assert after >= before
-
-# ============================================================
-# Service Charges
-# ============================================================
-
-def test_apply_service_fee(
+def test_active_account_count_returns_active_count(
     service,
-    customer,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "active_accounts", lambda: [1, 2])
 
-    account = service.open_current_account(
-
-        customer.customer_id,
-
-        "CA800001",
-
-        Money("2000"),
-
-    )
-
-    before = account.balance
-
-    service.apply_service_fee(
-        account.account_number
-    )
-
-    after = service.get_account(
-        account.account_number
-    ).balance
-
-    assert after < before
+    assert service.active_account_count() == 2
 
 
-def test_service_fee_updates_repository(
+def test_inactive_account_count_returns_inactive_count(
     service,
-    customer,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "inactive_accounts", lambda: [1])
 
-    account = service.open_current_account(
+    assert service.inactive_account_count() == 1
 
-        customer.customer_id,
 
-        "CA800002",
-
-        Money("2000"),
-
-    )
-
-    service.apply_service_fee(
-        account.account_number
-    )
-
-    repository_account = service.account_repository.get(
-        account.account_number
-    )
-
-    assert (
-        repository_account.balance
-        ==
-        service.get_account(
-            account.account_number
-        ).balance
-    )
-
-# ============================================================
-# Minimum Balance Rules
-# ============================================================
-
-def test_cannot_violate_minimum_balance(
+def test_total_balance_aggregates_active_accounts(
     service,
-    customer,
+    monkeypatch,
 ):
+    accounts = [
+        make_account("A1", balance="100.00"),
+        make_account("A2", balance="250.00"),
+    ]
+    monkeypatch.setattr(service, "active_accounts", lambda: accounts)
 
-    account = service.open_savings_account(
+    result = service.total_balance("SAR")
 
-        customer.customer_id,
-
-        "SA900001",
-
-        Money("1000"),
-
-    )
-
-    with pytest.raises(
-        ValueError
-    ):
-
-        service.withdraw(
-
-            account.account_number,
-
-            Money("950"),
-
-        )
+    assert result.amount == Decimal("350.00")
+    assert result.currency == "SAR"
 
 
-def test_minimum_balance_preserved(
+def test_total_balance_filters_by_currency(
     service,
-    customer,
+    monkeypatch,
 ):
+    accounts = [
+        make_account("A1", balance="100.00", currency="SAR"),
+        make_account("A2", balance="250.00", currency="USD"),
+    ]
+    monkeypatch.setattr(service, "active_accounts", lambda: accounts)
 
-    account = service.open_savings_account(
+    result = service.total_balance("SAR")
 
-        customer.customer_id,
+    assert result.amount == Decimal("100.00")
+    assert result.currency == "SAR"
 
-        "SA900002",
 
-        Money("1000"),
-
-    )
-
-    try:
-
-        service.withdraw(
-
-            account.account_number,
-
-            Money("950"),
-
-        )
-
-    except Exception:
-
-        pass
-
-    assert (
-
-        service.get_account(
-            account.account_number
-        ).balance
-
-        >=
-
-        account.minimum_balance
-
-    )
-
-# ============================================================
-# Overdraft Protection
-# ============================================================
-
-def test_current_account_overdraft_limit(
+def test_average_balance_returns_zero_when_no_accounts(
     service,
-    customer,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "active_accounts", lambda: [])
 
-    account = service.open_current_account(
+    result = service.average_balance("SAR")
 
-        customer.customer_id,
-
-        "CA900001",
-
-        Money("1000"),
-
-    )
-
-    with pytest.raises(
-        ValueError
-    ):
-
-        service.withdraw(
-
-            account.account_number,
-
-            Money("100000"),
-
-        )
+    assert result.amount == Decimal("0.00")
+    assert result.currency == "SAR"
 
 
-def test_savings_account_no_overdraft(
+def test_average_balance_calculates_average(
     service,
-    customer,
+    monkeypatch,
 ):
+    accounts = [
+        make_account("A1", balance="100.00"),
+        make_account("A2", balance="300.00"),
+    ]
+    monkeypatch.setattr(service, "active_accounts", lambda: accounts)
 
-    account = service.open_savings_account(
+    result = service.average_balance("SAR")
 
-        customer.customer_id,
+    assert result.amount == Decimal("200.00")
+    assert result.currency == "SAR"
 
-        "SA900003",
 
-        Money("500"),
-
-    )
-
-    with pytest.raises(
-        ValueError
-    ):
-
-        service.withdraw(
-
-            account.account_number,
-
-            Money("1000"),
-
-        )
-
-# ============================================================
-# Time Deposit Rules
-# ============================================================
-
-def test_time_deposit_cannot_withdraw_before_maturity(
+def test_statistics_returns_account_counts(
     service,
-    customer,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "account_count", lambda: 4)
+    monkeypatch.setattr(service, "active_account_count", lambda: 3)
+    monkeypatch.setattr(service, "inactive_account_count", lambda: 1)
 
-    account = service.open_time_deposit_account(
-
-        customer.customer_id,
-
-        "TD900001",
-
-        Money("10000"),
-
-        term_months=12,
-
-    )
-
-    with pytest.raises(
-        ValueError
-    ):
-
-        service.withdraw(
-
-            account.account_number,
-
-            Money("1000"),
-
-        )
+    assert service.statistics() == {
+        "total_accounts": 4,
+        "active_accounts": 3,
+        "inactive_accounts": 1,
+    }
 
 
-def test_time_deposit_maturity_check(
+def test_has_accounts_true_when_accounts_exist(
     service,
-    customer,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "account_count", lambda: 1)
 
-    account = service.open_time_deposit_account(
+    assert service.has_accounts() is True
 
-        customer.customer_id,
 
-        "TD900002",
-
-        Money("5000"),
-
-        term_months=6,
-
-    )
-
-    assert (
-        account.is_matured()
-        is False
-    )
-
-# ============================================================
-# Interest Consistency
-# ============================================================
-
-def test_interest_updates_repository(
+def test_has_accounts_false_when_no_accounts_exist(
     service,
-    customer,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "account_count", lambda: 0)
 
-    account = service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA910001",
-
-        Money("10000"),
-
-    )
-
-    service.apply_interest(
-        account.account_number
-    )
-
-    repository_account = service.account_repository.get(
-        account.account_number
-    )
-
-    service_account = service.get_account(
-        account.account_number
-    )
-
-    assert (
-        repository_account.balance
-        ==
-        service_account.balance
-    )
+    assert service.has_accounts() is False
 
 
-def test_multiple_interest_applications(
+def test_customer_total_balance_returns_zero_when_customer_has_no_accounts(
     service,
-    customer,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "accounts_for_customer", lambda _: [])
 
-    account = service.open_savings_account(
+    result = service.customer_total_balance(CUSTOMER_NUMBER)
 
-        customer.customer_id,
+    assert result.amount == Decimal("0.00")
+    assert result.currency == "USD"
 
-        "SA910002",
 
-        Money("10000"),
-
-    )
-
-    service.apply_interest(
-        account.account_number
-    )
-
-    first = service.get_account(
-        account.account_number
-    ).balance
-
-    service.apply_interest(
-        account.account_number
-    )
-
-    second = service.get_account(
-        account.account_number
-    ).balance
-
-    assert second >= first
-
-# ============================================================
-# Account Integrity
-# ============================================================
-
-def test_balance_never_negative_after_fees(
+def test_customer_total_balance_aggregates_customer_accounts(
     service,
-    customer,
+    monkeypatch,
 ):
+    accounts = [
+        make_account("A1", balance="100.00"),
+        make_account("A2", balance="250.00"),
+    ]
+    monkeypatch.setattr(service, "accounts_for_customer", lambda _: accounts)
 
-    account = service.open_current_account(
+    result = service.customer_total_balance(CUSTOMER_NUMBER)
 
-        customer.customer_id,
+    assert result.amount == Decimal("350.00")
+    assert result.currency == "SAR"
 
-        "CA910001",
 
-        Money("100"),
-
-    )
-
-    try:
-
-        for _ in range(20):
-
-            service.apply_service_fee(
-                account.account_number
-            )
-
-    except Exception:
-
-        pass
-
-    assert (
-        service.get_account(
-            account.account_number
-        ).balance
-        >= Money.zero()
-    )
-
-# PART 5
-
-# ============================================================
-# Account Closure
-# ============================================================
-
-def test_close_savings_account(
+def test_account_listing_returns_summary_for_each_account(
     service,
-    customer,
+    account,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "all_accounts", lambda: [account])
+    summary = {"account_number": ACCOUNT_NUMBER}
+    monkeypatch.setattr(service, "account_summary", lambda _: summary)
 
-    account = service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA100001",
-
-        Money("1000"),
-
-    )
-
-    service.close_account(
-        account.account_number
-    )
-
-    assert (
-        service.account_exists(
-            account.account_number
-        )
-        is False
-    )
+    assert service.account_listing() == [summary]
 
 
-def test_close_current_account(
+def test_customer_account_listing_returns_summary_for_each_customer_account(
     service,
-    customer,
+    account,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "accounts_for_customer", lambda _: [account])
+    summary = {"account_number": ACCOUNT_NUMBER}
+    monkeypatch.setattr(service, "account_summary", lambda _: summary)
 
-    account = service.open_current_account(
-
-        customer.customer_id,
-
-        "CA100001",
-
-        Money("1500"),
-
-    )
-
-    service.close_account(
-        account.account_number
-    )
-
-    assert (
-        service.account_count() == 0
-    )
+    assert service.customer_account_listing(CUSTOMER_NUMBER) == [summary]
 
 
-def test_close_time_deposit_account(
+# ---------------------------------------------------------------------------
+# Repository operations and status helpers
+# ---------------------------------------------------------------------------
+
+
+def test_refresh_delegates_to_repository_reload(
     service,
-    customer,
+    account_repository,
 ):
+    service.refresh()
+    account_repository.reload.assert_called_once_with()
 
-    account = service.open_time_deposit_account(
 
-        customer.customer_id,
-
-        "TD100001",
-
-        Money("10000"),
-
-        term_months=12,
-
-    )
-
-    service.close_account(
-        account.account_number
-    )
-
-    assert (
-        service.account_exists(
-            account.account_number
-        )
-        is False
-    )
-
-# ============================================================
-# Invalid Account Closure
-# ============================================================
-
-def test_close_unknown_account(
+def test_save_changes_delegates_to_repository_flush(
     service,
+    account_repository,
 ):
-
-    with pytest.raises(KeyError):
-
-        service.close_account(
-            "UNKNOWN"
-        )
+    service.save_changes()
+    account_repository.flush.assert_called_once_with()
 
 
-def test_close_none_account(
+def test_repository_statistics_delegates_to_repository(
     service,
+    account_repository,
 ):
+    expected = {"count": 2}
+    account_repository.statistics.return_value = expected
 
-    with pytest.raises(
-        ValidationError
-    ):
+    assert service.repository_statistics() == expected
 
-        service.close_account(None)
 
-# ============================================================
-# Save / Load
-# ============================================================
-
-def test_save_accounts(
+def test_validate_repository_returns_true_when_count_matches_length(
     service,
-    customer,
+    account_repository,
 ):
+    account_repository.count = 2
+    account_repository.__len__.return_value = 2
 
-    service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA200001",
-
-        Money("3000"),
-
-    )
-
-    service.save()
-
-    assert (
-        service.account_repository.storage_path.exists()
-    )
+    assert service.validate_repository() is True
 
 
-def test_load_accounts(
-    tmp_path,
-    customer,
-):
-
-    path = tmp_path / "accounts.csv"
-
-    repository = AccountRepository(
-        storage_path=path
-    )
-
-    service1 = AccountService(
-        repository,
-        CustomerRepository(
-            storage_path=tmp_path / "customers.csv"
-        ),
-    )
-
-    service1.customer_repository.add(customer)
-
-    service1.open_savings_account(
-
-        customer.customer_id,
-
-        "SA200002",
-
-        Money("5000"),
-
-    )
-
-    service1.save()
-
-    repository2 = AccountRepository(
-        storage_path=path
-    )
-
-    service2 = AccountService(
-        repository2,
-        service1.customer_repository,
-    )
-
-    service2.load()
-
-    assert service2.account_count() == 1
-
-# ============================================================
-# Reload Integrity
-# ============================================================
-
-def test_reload_preserves_balance(
-    tmp_path,
-    customer,
-):
-
-    path = tmp_path / "accounts.csv"
-
-    repository = AccountRepository(
-        storage_path=path
-    )
-
-    customer_repo = CustomerRepository(
-        storage_path=tmp_path / "customers.csv"
-    )
-
-    customer_repo.add(customer)
-
-    service = AccountService(
-        repository,
-        customer_repo,
-    )
-
-    account = service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA300001",
-
-        Money("2500"),
-
-    )
-
-    service.deposit(
-        account.account_number,
-        Money("500"),
-    )
-
-    service.save()
-
-    repository2 = AccountRepository(
-        storage_path=path
-    )
-
-    service2 = AccountService(
-        repository2,
-        customer_repo,
-    )
-
-    service2.load()
-
-    loaded = service2.get_account(
-        account.account_number
-    )
-
-    assert loaded.balance == Money("3000")
-
-# ============================================================
-# Persistence after Transactions
-# ============================================================
-
-def test_save_after_transfer(
+def test_validate_repository_returns_false_when_count_differs_from_length(
     service,
-    customer,
+    account_repository,
 ):
+    account_repository.count = 3
+    account_repository.__len__.return_value = 2
 
-    source = service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA400001",
-
-        Money("2000"),
-
-    )
-
-    destination = service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA400002",
-
-        Money("500"),
-
-    )
-
-    service.transfer(
-
-        source.account_number,
-
-        destination.account_number,
-
-        Money("300"),
-
-    )
-
-    service.save()
-
-    assert (
-        service.account_repository.storage_path.exists()
-    )
+    assert service.validate_repository() is False
 
 
-def test_save_after_interest(
+def test_is_account_active_returns_account_active_state(
     service,
-    customer,
+    account,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "validate_account", lambda _: account)
 
-    account = service.open_savings_account(
+    assert service.is_account_active(ACCOUNT_NUMBER) is True
 
-        customer.customer_id,
 
-        "SA400003",
-
-        Money("10000"),
-
-    )
-
-    service.apply_interest(
-        account.account_number
-    )
-
-    service.save()
-
-    assert (
-        service.account_repository.storage_path.exists()
-    )
-
-# ============================================================
-# Repository Synchronization
-# ============================================================
-
-def test_repository_after_close(
+def test_is_account_frozen_returns_account_frozen_state(
     service,
-    customer,
+    account_repository,
+    account,
 ):
+    account.is_frozen = True
+    account_repository.get_or_raise.return_value = account
 
-    account = service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA500001",
-
-        Money("1000"),
-
-    )
-
-    service.close_account(
-        account.account_number
-    )
-
-    assert (
-        service.account_repository.count()
-        == 0
-    )
+    assert service.is_account_frozen(ACCOUNT_NUMBER) is True
 
 
-def test_repository_after_save(
+def test_is_account_closed_returns_account_deleted_state(
     service,
-    customer,
+    account_repository,
+    account,
 ):
+    account.is_deleted = True
+    account_repository.get_or_raise.return_value = account
 
-    account = service.open_savings_account(
+    assert service.is_account_closed(ACCOUNT_NUMBER) is True
 
-        customer.customer_id,
 
-        "SA500002",
+# ---------------------------------------------------------------------------
+# String representations
+# ---------------------------------------------------------------------------
 
-        Money("5000"),
 
-    )
-
-    service.save()
-
-    stored = service.account_repository.get(
-        account.account_number
-    )
-
-    assert stored == account
-
-# ============================================================
-# Lifecycle Operations
-# ============================================================
-
-def test_open_update_close_cycle(
+def test_str_representation_contains_service_name_and_account_count(
     service,
-    customer,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "account_count", lambda: 2)
 
-    account = service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA600001",
-
-        Money("1000"),
-
-    )
-
-    service.deposit(
-        account.account_number,
-        Money("500"),
-    )
-
-    service.withdraw(
-        account.account_number,
-        Money("250"),
-    )
-
-    service.close_account(
-        account.account_number
-    )
-
-    assert service.account_count() == 0
+    assert str(service) == "AccountService(accounts=2)"
 
 
-def test_multiple_accounts_lifecycle(
+def test_repr_representation_contains_repository_name_and_account_count(
     service,
-    customer,
+    account_repository,
+    monkeypatch,
 ):
+    monkeypatch.setattr(service, "account_count", lambda: 2)
 
-    for i in range(5):
+    result = repr(service)
 
-        account = service.open_savings_account(
-
-            customer.customer_id,
-
-            f"SA60000{i}",
-
-            Money("1000"),
-
-        )
-
-        service.deposit(
-            account.account_number,
-            Money("100"),
-        )
-
-    service.save()
-
-    assert service.account_count() == 5
-
-
-# PART 6
-
-# ============================================================
-# Reporting
-# ============================================================
-
-def test_account_summary_empty(service):
-
-    summary = service.account_summary()
-
-    assert isinstance(summary, dict)
-
-    assert summary["total_accounts"] == 0
-
-
-def test_account_summary_single_account(
-    service,
-    customer,
-):
-
-    service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA700001",
-
-        Money("1000"),
-
-    )
-
-    summary = service.account_summary()
-
-    assert summary["total_accounts"] == 1
-
-
-def test_account_summary_multiple_accounts(
-    service,
-    customer,
-):
-
-    service.open_savings_account(
-        customer.customer_id,
-        "SA700002",
-        Money("1000"),
-    )
-
-    service.open_current_account(
-        customer.customer_id,
-        "CA700001",
-        Money("2000"),
-    )
-
-    service.open_time_deposit_account(
-        customer.customer_id,
-        "TD700001",
-        Money("5000"),
-        term_months=12,
-    )
-
-    summary = service.account_summary()
-
-    assert summary["total_accounts"] == 3
-
-# ============================================================
-# Search Operations
-# ============================================================
-
-def test_find_account(
-    service,
-    customer,
-):
-
-    account = service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA800001",
-
-        Money("1000"),
-
-    )
-
-    found = service.get_account(
-        account.account_number
-    )
-
-    assert found == account
-
-
-def test_find_unknown_account(
-    service,
-):
-
-    assert (
-        service.get_account("UNKNOWN")
-        is None
-    )
-
-
-def test_account_exists(
-    service,
-    customer,
-):
-
-    account = service.open_current_account(
-
-        customer.customer_id,
-
-        "CA800001",
-
-        Money("2000"),
-
-    )
-
-    assert service.account_exists(
-        account.account_number
-    )
-
-
-def test_account_not_exists(
-    service,
-):
-
-    assert (
-        service.account_exists(
-            "UNKNOWN"
-        )
-        is False
-    )
-
-# ============================================================
-# Collection Operations
-# ============================================================
-
-def test_get_all_accounts(
-    service,
-    customer,
-):
-
-    for i in range(5):
-
-        service.open_savings_account(
-
-            customer.customer_id,
-
-            f"SA90000{i}",
-
-            Money("1000"),
-
-        )
-
-    accounts = service.get_all_accounts()
-
-    assert len(accounts) == 5
-
-
-def test_account_count(
-    service,
-    customer,
-):
-
-    service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA900010",
-
-        Money("1000"),
-
-    )
-
-    assert service.account_count() == 1
-
-# ============================================================
-# Helper Methods
-# ============================================================
-
-def test_service_length(
-    service,
-    customer,
-):
-
-    service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA910001",
-
-        Money("1000"),
-
-    )
-
-    assert len(service) == 1
-
-
-def test_service_boolean_empty(
-    service,
-):
-
-    assert bool(service) is False
-
-
-def test_service_boolean_non_empty(
-    service,
-    customer,
-):
-
-    service.open_current_account(
-
-        customer.customer_id,
-
-        "CA910001",
-
-        Money("500"),
-
-    )
-
-    assert bool(service) is True
-
-# ============================================================
-# Iterator Support
-# ============================================================
-
-def test_iteration(
-    service,
-    customer,
-):
-
-    for i in range(10):
-
-        service.open_savings_account(
-
-            customer.customer_id,
-
-            f"SA9200{i}",
-
-            Money("100"),
-
-        )
-
-    count = 0
-
-    for account in service:
-
-        assert account is not None
-        count += 1
-
-    assert count == 10
-
-# ============================================================
-# Stress Testing
-# ============================================================
-
-def test_create_100_accounts(
-    service,
-    customer,
-):
-
-    for i in range(100):
-
-        service.open_savings_account(
-
-            customer.customer_id,
-
-            f"SA{i:05}",
-
-            Money("100"),
-
-        )
-
-    assert service.account_count() == 100
-
-
-def test_mass_deposit(
-    service,
-    customer,
-):
-
-    account = service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA930001",
-
-        Money("0"),
-
-    )
-
-    for _ in range(100):
-
-        service.deposit(
-
-            account.account_number,
-
-            Money("10"),
-
-        )
-
-    assert (
-
-        service.get_account(
-            account.account_number
-        ).balance
-
-        == Money("1000")
-
-    )
-
-
-def test_mass_withdrawals(
-    service,
-    customer,
-):
-
-    account = service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA930002",
-
-        Money("1000"),
-
-    )
-
-    for _ in range(20):
-
-        service.withdraw(
-
-            account.account_number,
-
-            Money("10"),
-
-        )
-
-    assert (
-
-        service.get_account(
-            account.account_number
-        ).balance
-
-        == Money("800")
-
-    )
-
-# ============================================================
-# Repository Consistency
-# ============================================================
-
-def test_repository_matches_service(
-    service,
-    customer,
-):
-
-    service.open_savings_account(
-
-        customer.customer_id,
-
-        "SA940001",
-
-        Money("1000"),
-
-    )
-
-    assert (
-
-        service.account_repository.count()
-
-        ==
-
-        service.account_count()
-
-    )
-
-
-def test_repository_get_all_matches_service(
-    service,
-    customer,
-):
-
-    service.open_current_account(
-
-        customer.customer_id,
-
-        "CA940001",
-
-        Money("500"),
-
-    )
-
-    assert (
-
-        service.account_repository.get_all()
-
-        ==
-
-        service.get_all_accounts()
-
-    )
-
-# ============================================================
-# Edge Cases
-# ============================================================
-
-def test_empty_service_accounts(
-    service,
-):
-
-    assert service.get_all_accounts() == []
-
-
-def test_empty_account_count(
-    service,
-):
-
-    assert service.account_count() == 0
-
-
-def test_clear_service(
-    service,
-    customer,
-):
-
-    for i in range(5):
-
-        service.open_savings_account(
-
-            customer.customer_id,
-
-            f"SA9500{i}",
-
-            Money("100"),
-
-        )
-
-    service.clear()
-
-    assert service.account_count() == 0
-
+    assert "AccountService" in result
+    assert "accounts=2" in result
+    assert account_repository.__class__.__name__ in result

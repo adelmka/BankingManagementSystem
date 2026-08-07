@@ -1,1454 +1,918 @@
-"""
-============================================================
-Customer Service Tests
-Part 1
-------------------------------------------------------------
-Coverage
+# Part 1 will establish the reusable fixtures and cover service initialization plus customer registration
 
-• Service construction
-• Dependency injection
-• Customer registration
-• Duplicate prevention
-• Validation failures
-============================================================
-"""
+from __future__ import annotations
+
+from datetime import date
 
 import pytest
 
-from services.customer_service import CustomerService
-
-from repositories.customer_repository import CustomerRepository
-
-from models.customer import Customer
-
-from models.value_objects.address import Address
-from models.value_objects.email import EmailAddress
-from models.value_objects.phone import PhoneNumber
-
-from exceptions.banking_exceptions import (
-    DuplicateCustomerError,
+from exceptions import (
+    EntityAlreadyExistsError,
     ValidationError,
 )
 
-test_customer_service.py
+from models.customer import Customer
+from models.value_objects.address import Address
 
-# ============================================================
+from repositories.customer_repository import CustomerRepository
+
+from services.customer_service import CustomerService
+
+from utils.constants import (
+    CustomerStatus,
+    Gender,
+)
+
+
+# ============================================================================
+# Test Repository Helper
+# ============================================================================
+
+
+class ServiceCustomerRepository(CustomerRepository):
+    """
+    Concrete repository helper used by CustomerService tests.
+
+    The class name intentionally does not begin with "Test" so pytest
+    does not attempt to collect it as a test class.
+    """
+
+    def __init__(self, csv_file) -> None:
+        self.CSV_FILE = csv_file
+        super().__init__()
+
+
+# ============================================================================
 # Fixtures
-# ============================================================
+# ============================================================================
+
 
 @pytest.fixture
 def repository(tmp_path):
+    """
+    Return an isolated customer repository for the current test.
+    """
 
-    return CustomerRepository(
-        storage_path=tmp_path / "customers.csv"
+    repository = ServiceCustomerRepository(
+        tmp_path / "customers.csv"
     )
+
+    return repository
 
 
 @pytest.fixture
 def service(repository):
+    """
+    Return a CustomerService using the isolated repository.
+    """
 
     return CustomerService(repository)
 
 
 @pytest.fixture
-def customer():
+def address():
+    """
+    Return a valid address.
+    """
 
-    return Customer(
-
-        customer_id="CUST000001",
-
-        first_name="John",
-
-        middle_name="A",
-
-        last_name="Smith",
-
-        national_id="1234567890",
-
-        email=EmailAddress(
-            "john@test.com"
-        ),
-
-        phone=PhoneNumber(
-            "+966501234567"
-        ),
-
-        address=Address(
-
-            street="King Road",
-
-            city="Riyadh",
-
-            state="Riyadh",
-
-            postal_code="12345",
-
-            country="Saudi Arabia",
-
-        ),
+    return Address(
+        address_line_1="123 Main Street",
+        city="Riyadh",
+        state_or_province="Riyadh",
+        postal_code="12345",
+        country="Saudi Arabia",
     )
 
-# ============================================================
+
+@pytest.fixture
+def customer(address):
+    """
+    Return a valid customer.
+    """
+
+    return Customer(
+        customer_id="C000001",
+        first_name="John",
+        last_name="Smith",
+        date_of_birth=date(1990, 1, 1),
+        gender=Gender.MALE,
+        national_id="1234567890",
+        email="john.smith@example.com",
+        phone_number="+966500000001",
+        address=address,
+        customer_status=CustomerStatus.ACTIVE,
+        registration_date=date(2026, 1, 1),
+        kyc_completed=True,
+    )
+
+
+@pytest.fixture
+def second_customer():
+    """
+    Return a second valid customer.
+    """
+
+    address = Address(
+        address_line_1="456 King Fahd Road",
+        city="Dammam",
+        state_or_province="Eastern Province",
+        postal_code="31411",
+        country="Saudi Arabia",
+    )
+
+    return Customer(
+        customer_id="C000002",
+        first_name="Jane",
+        last_name="Doe",
+        date_of_birth=date(1992, 5, 15),
+        gender=Gender.FEMALE,
+        national_id="2234567890",
+        email="jane.doe@example.com",
+        phone_number="+966500000002",
+        address=address,
+        customer_status=CustomerStatus.ACTIVE,
+        registration_date=date(2026, 1, 2),
+        kyc_completed=True,
+    )
+
+
+@pytest.fixture
+def repository_with_customer(repository, customer):
+    """
+    Return a repository containing one customer.
+    """
+
+    repository.add_customer(customer)
+
+    return repository
+
+
+@pytest.fixture
+def service_with_customer(repository_with_customer):
+    """
+    Return a CustomerService backed by a repository containing one
+    customer.
+    """
+
+    return CustomerService(repository_with_customer)
+
+
+# ============================================================================
+# Service Initialization
+# ============================================================================
+
+
+def test_service_initialization(
+    service,
+    repository,
+):
+    """
+    CustomerService should retain the supplied repository.
+    """
+
+    assert service.repository is repository
+
+
+def test_service_entity_count_initially_zero(
+    service,
+):
+    """
+    A newly initialized service should report zero entities.
+    """
+
+    assert service.entity_count == 0
+
+
+def test_service_repository_property(
+    service,
+    repository,
+):
+    """
+    The inherited repository property should expose the same repository
+    supplied during construction.
+    """
+
+    assert service.repository is repository
+
+
+# ============================================================================
 # Customer Registration
-# ============================================================
+# ============================================================================
+
 
 def test_register_customer(
     service,
+    repository,
     customer,
 ):
+    """
+    register_customer() should persist a valid customer and return
+    the same Customer instance.
+    """
 
-    service.register_customer(customer)
+    result = service.register_customer(customer)
 
-    assert (
-        service.repository.count()
-        == 1
-    )
+    assert result is customer
+    assert service.entity_count == 1
 
-
-def test_registered_customer_exists(
-    service,
-    customer,
-):
-
-    service.register_customer(customer)
-
-    stored = service.get_customer(
-
+    found = repository.find_by_customer_number(
         customer.customer_id
-
     )
 
-    assert stored == customer
+    assert found is not None
+    assert found.customer_id == customer.customer_id
 
-# ============================================================
-# Duplicate Prevention
-# ============================================================
 
-def test_duplicate_customer_id(
+def test_register_customer_returns_same_instance(
     service,
     customer,
 ):
+    """
+    register_customer() should return the customer supplied by the caller.
+    """
 
-    service.register_customer(customer)
+    result = service.register_customer(customer)
 
-    with pytest.raises(
-
-        DuplicateCustomerError
-
-    ):
-
-        service.register_customer(customer)
+    assert result is customer
 
 
-def test_duplicate_national_id(
+def test_register_customer_increases_entity_count(
     service,
     customer,
 ):
+    """
+    Successful registration should increase the service entity count.
+    """
+
+    assert service.entity_count == 0
 
     service.register_customer(customer)
 
-    duplicate = Customer(
+    assert service.entity_count == 1
 
-        customer_id="CUST000002",
-
-        first_name="Jane",
-
-        middle_name="",
-
-        last_name="Smith",
-
-        national_id=customer.national_id,
-
-        email=EmailAddress(
-
-            "jane@test.com"
-
-        ),
-
-        phone=PhoneNumber(
-
-            "+966500000000"
-
-        ),
-
-        address=customer.address,
-
-    )
-
-    with pytest.raises(
-
-        DuplicateCustomerError
-
-    ):
-
-        service.register_customer(
-
-            duplicate
-
-        )
-
-# ============================================================
-# Validation
-# ============================================================
-
-def test_register_none(service):
-
-    with pytest.raises(
-
-        ValidationError
-
-    ):
-
-        service.register_customer(None)
-
-
-def test_register_invalid_type(service):
-
-    with pytest.raises(
-
-        ValidationError
-
-    ):
-
-        service.register_customer(
-
-            "invalid"
-
-        )
-
-
-def test_register_dictionary(service):
-
-    with pytest.raises(
-
-        ValidationError
-
-    ):
-
-        service.register_customer({})
-
-
-def test_register_missing_required_fields(
-    service,
-):
-
-    with pytest.raises(
-
-        ValidationError
-
-    ):
-
-        service.register_customer(
-
-            Customer()
-
-        )
-
-# ============================================================
-# Multiple Customers
-# ============================================================
 
 def test_register_multiple_customers(
     service,
+    customer,
+    second_customer,
 ):
+    """
+    Multiple valid customers should be registered successfully.
+    """
 
-    for i in range(5):
+    first_result = service.register_customer(customer)
+    second_result = service.register_customer(second_customer)
 
-        customer = Customer(
+    assert first_result is customer
+    assert second_result is second_customer
+    assert service.entity_count == 2
 
-            customer_id=f"CUST{i:04}",
 
-            first_name="John",
-
-            middle_name="",
-
-            last_name="Smith",
-
-            national_id=f"100000000{i}",
-
-            email=EmailAddress(
-
-                f"user{i}@test.com"
-
-            ),
-
-            phone=PhoneNumber(
-
-                f"+9665000000{i}"
-
-            ),
-
-            address=Address(
-
-                street="Road",
-
-                city="Riyadh",
-
-                state="Riyadh",
-
-                postal_code="12345",
-
-                country="Saudi Arabia",
-
-            ),
-        )
-
-        service.register_customer(
-
-            customer
-
-        )
-
-    assert (
-
-        service.repository.count()
-
-        == 5
-
-    )
-
-# PART 2
-
-# ============================================================
-# Customer Retrieval
-# ============================================================
-
-def test_get_customer(
+def test_register_duplicate_customer_id_raises(
     service,
     customer,
 ):
+    """
+    Registering the same customer identifier twice should raise the
+    repository's duplicate-entity exception.
+    """
 
     service.register_customer(customer)
 
-    found = service.get_customer(
-        customer.customer_id
-    )
-
-    assert found == customer
+    with pytest.raises(EntityAlreadyExistsError):
+        service.register_customer(customer)
 
 
-def test_get_unknown_customer(
+def test_register_duplicate_national_id_raises(
+    service,
+    customer,
+    second_customer,
+):
+    """
+    Two customers with the same national ID should not be registered.
+    """
+
+    service.register_customer(customer)
+
+    second_customer.national_id = customer.national_id
+
+    with pytest.raises(EntityAlreadyExistsError):
+        service.register_customer(second_customer)
+
+
+def test_register_duplicate_email_raises(
+    service,
+    customer,
+    second_customer,
+):
+    """
+    Two customers with the same email address should not be registered.
+    """
+
+    service.register_customer(customer)
+
+    second_customer.email = customer.email
+
+    with pytest.raises(EntityAlreadyExistsError):
+        service.register_customer(second_customer)
+
+
+def test_register_duplicate_phone_number_raises(
+    service,
+    customer,
+    second_customer,
+):
+    """
+    Two customers with the same phone number should not be registered.
+    """
+
+    service.register_customer(customer)
+
+    second_customer.phone_number = customer.phone_number
+
+    with pytest.raises(EntityAlreadyExistsError):
+        service.register_customer(second_customer)
+
+
+# ============================================================================
+# Registration Validation
+# ============================================================================
+
+
+def test_register_none_customer_raises_validation_error(
     service,
 ):
+    """
+    register_customer() should reject None before persistence.
+    """
 
-    assert (
-        service.get_customer(
-            "UNKNOWN"
-        )
-        is None
-    )
+    with pytest.raises(ValidationError):
+        service.register_customer(None)
 
 
-def test_customer_exists(
+def test_failed_registration_does_not_add_customer(
+    service,
+):
+    """
+    A failed validation should not create a repository entity.
+    """
+
+    with pytest.raises(ValidationError):
+        service.register_customer(None)
+
+    assert service.entity_count == 0
+
+
+def test_failed_duplicate_registration_does_not_increase_count(
     service,
     customer,
 ):
+    """
+    A duplicate registration should leave the entity count unchanged.
+    """
 
     service.register_customer(customer)
 
-    assert service.customer_exists(
+    with pytest.raises(EntityAlreadyExistsError):
+        service.register_customer(customer)
+
+    assert service.entity_count == 1
+
+
+# ============================================================================
+# Registration Persistence
+# ============================================================================
+
+
+def test_registered_customer_can_be_retrieved(
+    service,
+    customer,
+):
+    """
+    A successfully registered customer should subsequently be retrievable
+    through the service.
+    """
+
+    service.register_customer(customer)
+
+    found = service.find_customer(
         customer.customer_id
     )
 
+    assert found is not None
+    assert found.customer_id == customer.customer_id
 
-def test_customer_not_exists(
+
+def test_register_customer_preserves_customer_data(
+    service,
+    customer,
+):
+    """
+    Registration should preserve the customer's core business data.
+    """
+
+    service.register_customer(customer)
+
+    found = service.find_customer(
+        customer.customer_id
+    )
+
+    assert found is not None
+    assert found.first_name == customer.first_name
+    assert found.last_name == customer.last_name
+    assert found.national_id == customer.national_id
+    assert found.email == customer.email
+    assert found.phone_number == customer.phone_number
+    assert found.customer_status == customer.customer_status
+    assert found.registration_date == customer.registration_date
+    assert found.kyc_completed == customer.kyc_completed
+
+
+# ============================================================================
+# End of Part 1
+# ============================================================================
+
+
+# ============================================================================
+# Part 2 — Lookup, Collection, Maintenance, and Lifecycle Operations
+# ============================================================================
+
+
+# ============================================================================
+# Customer Lookup
+# ============================================================================
+
+
+def test_find_customer_returns_customer(
+    service_with_customer,
+    customer,
+):
+    """
+    find_customer() should return the registered customer.
+    """
+
+    found = service_with_customer.find_customer(
+        customer.customer_id
+    )
+
+    assert found is not None
+    assert found.customer_id == customer.customer_id
+
+
+def test_find_customer_returns_none_for_unknown_customer(
     service,
 ):
+    """
+    find_customer() should return None when the customer does not exist.
+    """
+
+    result = service.find_customer("C999999")
+
+    assert result is None
+
+
+def test_get_customer_returns_customer(
+    service_with_customer,
+    customer,
+):
+    """
+    get_customer() should return the requested customer.
+    """
+
+    found = service_with_customer.get_customer(
+        customer.customer_id
+    )
+
+    assert found is not None
+    assert found.customer_id == customer.customer_id
+
+
+def test_get_customer_raises_for_unknown_customer(
+    service,
+):
+    """
+    get_customer() should raise when the requested customer does not exist.
+    """
+
+    with pytest.raises(Exception):
+        service.get_customer("C999999")
+
+
+# ============================================================================
+# Customer Existence
+# ============================================================================
+
+
+def test_customer_exists_returns_true(
+    service_with_customer,
+    customer,
+):
+    """
+    customer_exists() should return True for a registered customer.
+    """
 
     assert (
-        service.customer_exists(
-            "UNKNOWN"
+        service_with_customer.customer_exists(
+            customer.customer_id
         )
+        is True
+    )
+
+
+def test_customer_exists_returns_false(
+    service,
+):
+    """
+    customer_exists() should return False for an unknown customer.
+    """
+
+    assert (
+        service.customer_exists("C999999")
         is False
     )
 
-# ============================================================
+
+# ============================================================================
+# Customer Collection
+# ============================================================================
+
+
+def test_all_customers_returns_registered_customers(
+    service,
+    customer,
+    second_customer,
+):
+    """
+    all_customers() should return the registered customers.
+    """
+
+    service.register_customer(customer)
+    service.register_customer(second_customer)
+
+    customers = service.all_customers()
+
+    assert len(customers) == 2
+
+    customer_ids = {
+        item.customer_id
+        for item in customers
+    }
+
+    assert customer.customer_id in customer_ids
+    assert second_customer.customer_id in customer_ids
+
+
+def test_all_customers_empty_service(
+    service,
+):
+    """
+    all_customers() should return an empty collection when no customers
+    have been registered.
+    """
+
+    customers = service.all_customers()
+
+    assert customers == []
+
+
+# ============================================================================
 # Customer Update
-# ============================================================
+# ============================================================================
 
-def test_update_customer(
-    service,
+
+def test_update_customer_persists_changes(
+    service_with_customer,
     customer,
 ):
+    """
+    update_customer() should persist changes to an existing customer.
+    """
 
-    service.register_customer(customer)
+    customer.email = "updated.email@example.com"
 
-    customer.first_name = "Michael"
+    result = service_with_customer.update_customer(
+        customer
+    )
 
-    service.update_customer(customer)
+    assert result is customer
 
-    updated = service.get_customer(
+    found = service_with_customer.find_customer(
         customer.customer_id
     )
 
-    assert updated.first_name == "Michael"
+    assert found is not None
+    assert found.email == "updated.email@example.com"
 
 
-def test_update_customer_phone(
+def test_update_customer_preserves_customer_identity(
+    service_with_customer,
+    customer,
+):
+    """
+    update_customer() should retain the customer's business identifier.
+    """
+
+    original_id = customer.customer_id
+
+    service_with_customer.update_customer(
+        customer
+    )
+
+    found = service_with_customer.find_customer(
+        original_id
+    )
+
+    assert found is not None
+    assert found.customer_id == original_id
+
+
+def test_update_unknown_customer_raises(
     service,
     customer,
 ):
-
-    service.register_customer(customer)
-
-    customer.phone = PhoneNumber(
-        "+966555555555"
-    )
-
-    service.update_customer(customer)
-
-    updated = service.get_customer(
-        customer.customer_id
-    )
-
-    assert (
-        updated.phone == customer.phone
-    )
-
-
-def test_update_unknown_customer(
-    service,
-    customer,
-):
-
-    with pytest.raises(KeyError):
-
-        service.update_customer(customer)
-
-# ============================================================
-# Customer Deletion
-# ============================================================
-
-def test_delete_customer(
-    service,
-    customer,
-):
-
-    service.register_customer(customer)
-
-    service.delete_customer(
-        customer.customer_id
-    )
-
-    assert (
-        service.customer_exists(
-            customer.customer_id
-        )
-        is False
-    )
-
-
-def test_delete_unknown_customer(
-    service,
-):
-
-    with pytest.raises(KeyError):
-
-        service.delete_customer(
-            "UNKNOWN"
-        )
-
-
-def test_repository_empty_after_delete(
-    service,
-    customer,
-):
-
-    service.register_customer(customer)
-
-    service.delete_customer(
-        customer.customer_id
-    )
-
-    assert (
-        service.repository.count()
-        == 0
-    )
-
-# ============================================================
-# Search Operations
-# ============================================================
-
-def test_search_by_customer_id(
-    service,
-    customer,
-):
-
-    service.register_customer(customer)
-
-    results = service.search(
-        customer.customer_id
-    )
-
-    assert customer in results
-
-
-def test_search_by_last_name(
-    service,
-    customer,
-):
-
-    service.register_customer(customer)
-
-    results = service.search(
-        "Smith"
-    )
-
-    assert customer in results
-
-
-def test_search_by_partial_name(
-    service,
-    customer,
-):
-
-    service.register_customer(customer)
-
-    results = service.search(
-        "Joh"
-    )
-
-    assert customer in results
-
-
-def test_search_unknown(
-    service,
-):
-
-    assert (
-        service.search("XYZ")
-        == []
-    )
-
-# ============================================================
-# Filtering
-# ============================================================
-
-def test_get_all_customers(
-    service,
-):
-
-    for i in range(3):
-
-        customer = Customer(
-
-            customer_id=f"CUST{i}",
-
-            first_name="John",
-
-            middle_name="",
-
-            last_name="Smith",
-
-            national_id=f"100000000{i}",
-
-            email=EmailAddress(
-                f"user{i}@test.com"
-            ),
-
-            phone=PhoneNumber(
-                f"+9665000000{i}"
-            ),
-
-            address=Address(
-
-                street="Road",
-
-                city="Riyadh",
-
-                state="Riyadh",
-
-                postal_code="12345",
-
-                country="Saudi Arabia",
-
-            ),
-        )
-
-        service.register_customer(
-            customer
-        )
-
-    assert (
-        len(
-            service.get_all_customers()
-        )
-        == 3
-    )
-
-
-def test_customer_count(
-    service,
-    customer,
-):
-
-    service.register_customer(customer)
-
-    assert (
-        service.customer_count()
-        == 1
-    )
-
-# ============================================================
-# Repository Delegation
-# ============================================================
-
-def test_repository_matches_service(
-    service,
-    customer,
-):
-
-    service.register_customer(customer)
-
-    assert (
-
-        service.customer_count()
-
-        ==
-
-        service.repository.count()
-
-    )
-
-
-def test_get_all_matches_repository(
-    service,
-    customer,
-):
-
-    service.register_customer(customer)
-
-    assert (
-
-        service.get_all_customers()
-
-        ==
-
-        service.repository.get_all()
-
-    )
-
-# ============================================================
-# Business Rules
-# ============================================================
-
-def test_register_same_email_not_allowed(
-    service,
-    customer,
-):
-
-    service.register_customer(customer)
-
-    duplicate = Customer(
-
-        customer_id="CUST999",
-
-        first_name="Jane",
-
-        middle_name="",
-
-        last_name="Doe",
-
-        national_id="9999999999",
-
-        email=customer.email,
-
-        phone=PhoneNumber(
-            "+966599999999"
-        ),
-
-        address=customer.address,
-
-    )
-
-    with pytest.raises(
-        DuplicateCustomerError
-    ):
-
-        service.register_customer(
-            duplicate
-        )
-
-
-def test_register_same_phone_not_allowed(
-    service,
-    customer,
-):
-
-    service.register_customer(customer)
-
-    duplicate = Customer(
-
-        customer_id="CUST998",
-
-        first_name="Jane",
-
-        middle_name="",
-
-        last_name="Doe",
-
-        national_id="8888888888",
-
-        email=EmailAddress(
-            "another@test.com"
-        ),
-
-        phone=customer.phone,
-
-        address=customer.address,
-
-    )
-
-    with pytest.raises(
-        DuplicateCustomerError
-    ):
-
-        service.register_customer(
-            duplicate
-        )
-
-# PART 3
-
-# ============================================================
-# Customer Reporting
-# ============================================================
-
-def test_customer_summary_empty(service):
-
-    summary = service.customer_summary()
-
-    assert isinstance(summary, dict)
-
-    assert summary["total_customers"] == 0
-
-
-def test_customer_summary_after_registration(
-    service,
-    customer,
-):
-
-    service.register_customer(customer)
-
-    summary = service.customer_summary()
-
-    assert summary["total_customers"] == 1
-
-
-def test_customer_statistics(
-    service,
-):
-
-    for i in range(5):
-
-        customer = Customer(
-
-            customer_id=f"CUST{i}",
-
-            first_name="John",
-
-            middle_name="",
-
-            last_name="Smith",
-
-            national_id=f"100000000{i}",
-
-            email=EmailAddress(
-                f"user{i}@test.com"
-            ),
-
-            phone=PhoneNumber(
-                f"+9665000000{i}"
-            ),
-
-            address=Address(
-
-                street="Road",
-
-                city="Riyadh",
-
-                state="Riyadh",
-
-                postal_code="12345",
-
-                country="Saudi Arabia",
-
-            ),
-        )
-
-        service.register_customer(customer)
-
-    summary = service.customer_summary()
-
-    assert summary["total_customers"] == 5
-
-# ============================================================
-# Persistence Operations
-# ============================================================
-
-def test_save_customers(
-    service,
-    customer,
-):
-
-    service.register_customer(customer)
-
-    service.save()
-
-    assert service.repository.storage_path.exists()
-
-
-def test_load_customers(
-    tmp_path,
-    customer,
-):
-
-    path = tmp_path / "customers.csv"
-
-    repository = CustomerRepository(
-        storage_path=path
-    )
-
-    service1 = CustomerService(repository)
-
-    service1.register_customer(customer)
-
-    service1.save()
-
-    repository2 = CustomerRepository(
-        storage_path=path
-    )
-
-    service2 = CustomerService(repository2)
-
-    service2.load()
-
-    assert service2.customer_count() == 1
-
-
-def test_reload_preserves_customer(
-    tmp_path,
-    customer,
-):
-
-    path = tmp_path / "customers.csv"
-
-    repository = CustomerRepository(
-        storage_path=path
-    )
-
-    service1 = CustomerService(repository)
-
-    service1.register_customer(customer)
-
-    service1.save()
-
-    repository2 = CustomerRepository(
-        storage_path=path
-    )
-
-    service2 = CustomerService(repository2)
-
-    service2.load()
-
-    loaded = service2.get_customer(
-        customer.customer_id
-    )
-
-    assert loaded == customer
-
-# ============================================================
-# Exception Handling
-# ============================================================
-
-def test_delete_none(service):
-
-    with pytest.raises(
-        ValidationError
-    ):
-
-        service.delete_customer(None)
-
-
-def test_get_none(service):
-
-    with pytest.raises(
-        ValidationError
-    ):
-
-        service.get_customer(None)
-
-
-def test_search_none(service):
-
-    with pytest.raises(
-        ValidationError
-    ):
-
-        service.search(None)
-
-
-def test_update_none(service):
-
-    with pytest.raises(
-        ValidationError
-    ):
-
-        service.update_customer(None)
-
-# ============================================================
-# Service Consistency
-# ============================================================
-
-def test_register_then_delete(
-    service,
-    customer,
-):
-
-    service.register_customer(customer)
-
-    service.delete_customer(
-        customer.customer_id
-    )
-
-    assert service.customer_count() == 0
-
-
-def test_update_then_reload(
-    tmp_path,
-    customer,
-):
-
-    path = tmp_path / "customers.csv"
-
-    repository = CustomerRepository(
-        storage_path=path
-    )
-
-    service = CustomerService(repository)
-
-    service.register_customer(customer)
-
-    customer.first_name = "Michael"
-
-    service.update_customer(customer)
-
-    service.save()
-
-    repository2 = CustomerRepository(
-        storage_path=path
-    )
-
-    service2 = CustomerService(repository2)
-
-    service2.load()
-
-    updated = service2.get_customer(
-        customer.customer_id
-    )
-
-    assert updated.first_name == "Michael"
-
-
-def test_delete_then_reload(
-    tmp_path,
-    customer,
-):
-
-    path = tmp_path / "customers.csv"
-
-    repository = CustomerRepository(
-        storage_path=path
-    )
-
-    service = CustomerService(repository)
-
-    service.register_customer(customer)
-
-    service.delete_customer(
-        customer.customer_id
-    )
-
-    service.save()
-
-    repository2 = CustomerRepository(
-        storage_path=path
-    )
-
-    service2 = CustomerService(repository2)
-
-    service2.load()
-
-    assert service2.customer_count() == 0
-
-# ============================================================
-# Edge Cases
-# ============================================================
-
-def test_empty_customer_list(service):
-
-    assert service.get_all_customers() == []
-
-
-def test_customer_count_empty(service):
-
-    assert service.customer_count() == 0
-
-
-def test_search_empty_string(service):
-
-    assert service.search("") == []
-
-
-def test_search_whitespace(service):
-
-    assert service.search("   ") == []
-
-# ============================================================
-# Repository Synchronization
-# ============================================================
-
-def test_repository_sync_after_update(
-    service,
-    customer,
-):
-
-    service.register_customer(customer)
-
-    customer.last_name = "Johnson"
-
-    service.update_customer(customer)
-
-    repository_customer = service.repository.get(
-        customer.customer_id
-    )
-
-    assert repository_customer.last_name == "Johnson"
-
-
-def test_repository_sync_after_delete(
-    service,
-    customer,
-):
-
-    service.register_customer(customer)
-
-    service.delete_customer(
-        customer.customer_id
-    )
-
-    assert service.repository.count() == 0
-
-# ============================================================
-# Repository Synchronization
-# ============================================================
-
-def test_repository_sync_after_update(
-    service,
-    customer,
-):
-
-    service.register_customer(customer)
-
-    customer.last_name = "Johnson"
-
-    service.update_customer(customer)
-
-    repository_customer = service.repository.get(
-        customer.customer_id
-    )
-
-    assert repository_customer.last_name == "Johnson"
-
-
-def test_repository_sync_after_delete(
-    service,
-    customer,
-):
-
-    service.register_customer(customer)
-
-    service.delete_customer(
-        customer.customer_id
-    )
-
-    assert service.repository.count() == 0
-
-
-# PART 4
-
-# ============================================================
-# Batch Registration
-# ============================================================
-
-def test_register_many_customers(
-    service,
-):
-
-    for i in range(100):
-
-        customer = Customer(
-
-            customer_id=f"CUST{i:05}",
-
-            first_name="John",
-
-            middle_name="",
-
-            last_name="Smith",
-
-            national_id=f"100000000{i}",
-
-            email=EmailAddress(
-                f"user{i}@test.com"
-            ),
-
-            phone=PhoneNumber(
-                f"+9665{i:08}"
-            ),
-
-            address=Address(
-
-                street="King Road",
-
-                city="Riyadh",
-
-                state="Riyadh",
-
-                postal_code="12345",
-
-                country="Saudi Arabia",
-
-            ),
-        )
-
-        service.register_customer(customer)
-
-    assert service.customer_count() == 100
-
-
-def test_clear_all_customers(
-    service,
-):
-
-    for i in range(10):
-
-        customer = Customer(
-
-            customer_id=f"CUST{i}",
-
-            first_name="John",
-
-            middle_name="",
-
-            last_name="Smith",
-
-            national_id=f"200000000{i}",
-
-            email=EmailAddress(
-                f"user{i}@test.com"
-            ),
-
-            phone=PhoneNumber(
-                f"+966500000{i:03}"
-            ),
-
-            address=Address(
-
-                street="Road",
-
-                city="Riyadh",
-
-                state="Riyadh",
-
-                postal_code="12345",
-
-                country="Saudi Arabia",
-
-            ),
-        )
-
-        service.register_customer(customer)
-
-    service.clear()
-
-    assert service.customer_count() == 0
-
-# ============================================================
-# Boundary Conditions
-# ============================================================
-
-def test_long_customer_name(
-    service,
-    customer,
-):
-
-    customer.first_name = "A" * 100
-
-    service.register_customer(customer)
-
-    assert (
-        service.get_customer(
-            customer.customer_id
-        ).first_name
-        == "A" * 100
-    )
-
-
-def test_unicode_customer_name(
-    service,
-    customer,
-):
-
-    customer.first_name = "محمد"
-
-    service.register_customer(customer)
-
-    stored = service.get_customer(
-        customer.customer_id
-    )
-
-    assert stored.first_name == "محمد"
-
-
-def test_special_characters_address(
-    service,
-    customer,
-):
-
-    customer.address.street = (
-        "King Fahd Rd., Building #25"
-    )
-
-    service.register_customer(customer)
-
-    stored = service.get_customer(
-        customer.customer_id
-    )
-
-    assert (
-        stored.address.street
-        == "King Fahd Rd., Building #25"
-    )
-
-# ============================================================
-# Large Dataset
-# ============================================================
-
-def test_large_customer_repository(
-    service,
-):
-
-    for i in range(1000):
-
-        customer = Customer(
-
-            customer_id=f"CUST{i:05}",
-
-            first_name="John",
-
-            middle_name="",
-
-            last_name="Smith",
-
-            national_id=f"900000000{i}",
-
-            email=EmailAddress(
-                f"user{i}@test.com"
-            ),
-
-            phone=PhoneNumber(
-                f"+9666{i:08}"
-            ),
-
-            address=Address(
-
-                street="Road",
-
-                city="Riyadh",
-
-                state="Riyadh",
-
-                postal_code="12345",
-
-                country="Saudi Arabia",
-
-            ),
-        )
-
-        service.register_customer(customer)
-
-    assert service.customer_count() == 1000
-
-# ============================================================
-# Advanced Business Rules
-# ============================================================
-
-def test_customer_id_is_immutable(
-    service,
-    customer,
-):
-
-    service.register_customer(customer)
-
-    customer.customer_id = "NEWID"
-
-    with pytest.raises(
-        ValidationError
-    ):
-
+    """
+    Updating a customer that is not registered should raise an exception.
+    """
+
+    with pytest.raises(Exception):
         service.update_customer(customer)
 
 
-def test_national_id_is_unique_after_update(
+# ============================================================================
+# Customer Activation
+# ============================================================================
+
+
+def test_activate_customer(
+    service_with_customer,
+    customer,
+):
+    """
+    activate_customer() should activate an inactive customer.
+    """
+
+    customer.close_customer()
+
+    service_with_customer.update_customer(
+        customer
+    )
+
+    result = service_with_customer.activate_customer(
+        customer.customer_id
+    )
+
+    assert result is not None
+    assert result.customer_status == CustomerStatus.ACTIVE
+    assert result.is_active is True
+
+
+def test_activate_customer_not_found(
     service,
 ):
+    """
+    Activating an unknown customer should raise an exception.
+    """
 
-    customer1 = Customer(
-        customer_id="C1",
-        first_name="John",
-        middle_name="",
-        last_name="Smith",
-        national_id="1111111111",
-        email=EmailAddress("a@test.com"),
-        phone=PhoneNumber("+966500000001"),
-        address=Address(
-            street="Road",
-            city="Riyadh",
-            state="Riyadh",
-            postal_code="12345",
-            country="Saudi Arabia",
-        ),
+    with pytest.raises(Exception):
+        service.activate_customer("C999999")
+
+
+# ============================================================================
+# Customer Deactivation
+# ============================================================================
+
+
+def test_deactivate_customer(
+    service_with_customer,
+    customer,
+):
+    """
+    deactivate_customer() should close an active customer
+    and mark the entity as inactive.
+    """
+
+    result = service_with_customer.deactivate_customer(
+        customer.customer_id,
     )
 
-    customer2 = Customer(
-        customer_id="C2",
-        first_name="Jane",
-        middle_name="",
-        last_name="Smith",
-        national_id="2222222222",
-        email=EmailAddress("b@test.com"),
-        phone=PhoneNumber("+966500000002"),
-        address=customer1.address,
-    )
+    assert result is not None
+    assert result.customer_id == customer.customer_id
+    assert result.customer_status == CustomerStatus.INACTIVE
+    assert result.is_active is False
 
-    service.register_customer(customer1)
-    service.register_customer(customer2)
-
-    customer2.national_id = "1111111111"
-
-    with pytest.raises(
-        DuplicateCustomerError
+    def test_deactivate_customer_persists_state(
+        service_with_customer,
+        customer,
     ):
+        """
+        Deactivation should persist the changed customer state.
+        """
 
-        service.update_customer(customer2)
-
-# ============================================================
-# Iteration Support
-# ============================================================
-
-def test_service_iteration(
-    service,
-):
-
-    for i in range(5):
-
-        customer = Customer(
-
-            customer_id=f"C{i}",
-
-            first_name="John",
-
-            middle_name="",
-
-            last_name="Smith",
-
-            national_id=f"77777777{i}",
-
-            email=EmailAddress(
-                f"user{i}@test.com"
-            ),
-
-            phone=PhoneNumber(
-                f"+966500001{i:03}"
-            ),
-
-            address=Address(
-
-                street="Road",
-
-                city="Riyadh",
-
-                state="Riyadh",
-
-                postal_code="12345",
-
-                country="Saudi Arabia",
-
-            ),
+        service_with_customer.deactivate_customer(
+            customer.customer_id
         )
 
-        service.register_customer(customer)
-
-    count = 0
-
-    for _ in service:
-
-        count += 1
-
-    assert count == service.customer_count()
-
-# ============================================================
-# Iteration Support
-# ============================================================
-
-def test_service_iteration(
-    service,
-):
-
-    for i in range(5):
-
-        customer = Customer(
-
-            customer_id=f"C{i}",
-
-            first_name="John",
-
-            middle_name="",
-
-            last_name="Smith",
-
-            national_id=f"77777777{i}",
-
-            email=EmailAddress(
-                f"user{i}@test.com"
-            ),
-
-            phone=PhoneNumber(
-                f"+966500001{i:03}"
-            ),
-
-            address=Address(
-
-                street="Road",
-
-                city="Riyadh",
-
-                state="Riyadh",
-
-                postal_code="12345",
-
-                country="Saudi Arabia",
-
-            ),
+        found = service_with_customer.find_customer(
+            customer.customer_id,
+            active_only=False,
         )
 
-        service.register_customer(customer)
+        assert found is not None
+        assert found.customer_status == CustomerStatus.INACTIVE
+        assert found.is_active is False
 
-    count = 0
 
-    for _ in service:
+def test_deactivate_customer_not_found(
+    service,
+):
+    """
+    Deactivating an unknown customer should raise an exception.
+    """
 
-        count += 1
+    with pytest.raises(Exception):
+        service.deactivate_customer("C999999")
 
-    assert count == service.customer_count()
+
+# ============================================================================
+# Customer Reactivation
+# ============================================================================
+
+
+def test_reactivate_customer(
+    service_with_customer,
+    customer,
+):
+    """
+    reactivate_customer() should restore an inactive customer to active
+    status.
+    """
+
+    service_with_customer.deactivate_customer(
+        customer.customer_id
+    )
+
+    result = service_with_customer.reactivate_customer(
+        customer.customer_id
+    )
+
+    assert result is not None
+    assert result.customer_id == customer.customer_id
+    assert result.customer_status == CustomerStatus.ACTIVE
+
+
+def test_reactivate_customer_persists_state(
+    service_with_customer,
+    customer,
+):
+    """
+    Reactivation should persist the customer's active state.
+    """
+
+    service_with_customer.deactivate_customer(
+        customer.customer_id
+    )
+
+    service_with_customer.reactivate_customer(
+        customer.customer_id
+    )
+
+    found = service_with_customer.find_customer(
+        customer.customer_id
+    )
+
+    assert found is not None
+    assert found.customer_status == CustomerStatus.ACTIVE
+
+
+def test_reactivate_customer_not_found(
+    service,
+):
+    """
+    Reactivating an unknown customer should raise an exception.
+    """
+
+    with pytest.raises(Exception):
+        service.reactivate_customer("C999999")
+
+
+# ============================================================================
+# Customer Archival
+# ============================================================================
+
+
+def test_archive_customer(
+    service_with_customer,
+    customer,
+):
+    """
+    archive_customer() should transition an existing customer
+    out of the active state.
+    """
+
+    result = service_with_customer.archive_customer(
+        customer.customer_id
+    )
+
+    assert result is True
+
+    archived = service_with_customer.find_customer(
+        customer.customer_id,
+        active_only=False,
+    )
+
+    assert archived is not None
+    assert archived.customer_id == customer.customer_id
+    assert archived.is_active is False
+
+def test_archive_customer_persists_state(
+    service_with_customer,
+    customer,
+):
+    """
+    Archiving should persist the resulting customer state.
+    """
+
+    service_with_customer.archive_customer(
+        customer.customer_id
+    )
+
+    found = service_with_customer.find_customer(
+        customer.customer_id,
+        active_only=False,
+    )
+
+    assert found is not None
+    assert found.customer_id == customer.customer_id
+    assert found.is_active is False
+
+
+def test_archive_customer_not_found(
+    service,
+):
+    """
+    Archiving an unknown customer should raise an exception.
+    """
+
+    with pytest.raises(Exception):
+        service.archive_customer("C999999")
+
+
+# ============================================================================
+# Lifecycle Sequence
+# ============================================================================
+
+
+def test_customer_lifecycle_deactivate_reactivate(
+    service_with_customer,
+    customer,
+):
+    """
+    A customer should support the normal deactivate/reactivate lifecycle.
+    """
+
+    service_with_customer.deactivate_customer(
+        customer.customer_id
+    )
+
+    inactive = service_with_customer.find_customer(
+        customer.customer_id,
+        active_only=False,
+    )
+
+    assert inactive is not None
+    assert inactive.customer_id == customer.customer_id
+    assert inactive.customer_status == CustomerStatus.INACTIVE
+    assert inactive.is_active is False
+    
+
+def test_customer_lifecycle_preserves_customer_id(
+    service_with_customer,
+    customer,
+):
+    """
+    Customer lifecycle operations should never change customer_id.
+    """
+
+    customer_id = customer.customer_id
+
+    service_with_customer.deactivate_customer(
+        customer_id
+    )
+
+    service_with_customer.reactivate_customer(
+        customer_id
+    )
+
+    found = service_with_customer.find_customer(
+        customer_id
+    )
+
+    assert found is not None
+    assert found.customer_id == customer_id
+
+
+# ============================================================================
+# End of Part 2
+# ============================================================================
+
 

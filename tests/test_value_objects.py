@@ -31,18 +31,29 @@ def test_create_address():
     """
     Verify that an Address can be created successfully.
     """
-
+    """
     address = Address(
         street="123 Main Street",
+        "",
         city="Riyadh",
-        state="Riyadh",
+        state_or_province="Riyadh",
         postal_code="12345",
         country="Saudi Arabia",
     )
+    """
 
-    assert address.street == "123 Main Street"
+    address = Address(
+        address_line_1="123 Main Street",
+        address_line_2="",
+        city="Riyadh",
+        state_or_province="Riyadh",
+        postal_code="12345",
+        country="Saudi Arabia",
+    )
+    assert address.address_line_1 == "123 Main Street"
+    assert address.address_line_2 ==""
     assert address.city == "Riyadh"
-    assert address.state == "Riyadh"
+    assert address.state_or_province == "Riyadh"
     assert address.postal_code == "12345"
     assert address.country == "Saudi Arabia"
 
@@ -54,6 +65,7 @@ def test_address_equality():
 
     address1 = Address(
         "123 Main Street",
+        "",
         "Riyadh",
         "Riyadh",
         "12345",
@@ -62,6 +74,7 @@ def test_address_equality():
 
     address2 = Address(
         "123 Main Street",
+        "",
         "Riyadh",
         "Riyadh",
         "12345",
@@ -78,6 +91,7 @@ def test_address_inequality():
 
     address1 = Address(
         "123 Main Street",
+        "",
         "Riyadh",
         "Riyadh",
         "12345",
@@ -86,6 +100,7 @@ def test_address_inequality():
 
     address2 = Address(
         "456 King Fahd Road",
+        "",
         "Jeddah",
         "Makkah",
         "54321",
@@ -259,6 +274,7 @@ def test_address_is_immutable():
 
     address = Address(
         "123 Main Street",
+        "",
         "Riyadh",
         "Riyadh",
         "12345",

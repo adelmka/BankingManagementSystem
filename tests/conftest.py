@@ -20,10 +20,19 @@ Author      : Adel Alawiyat / ChatGPT
 Python      : 3.13+
 ====================================================================
 """
-
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from decimal import Decimal
+
+from datetime import date
 
 import pytest
 
@@ -37,6 +46,11 @@ from models.savings_account import SavingsAccount
 from models.time_deposit_account import TimeDepositAccount
 
 from models.value_objects.address import Address
+
+from utils.constants import (
+    Gender,
+    CustomerStatus,
+)
 
 
 # ================================================================
@@ -129,9 +143,10 @@ def transaction_service(container):
 def sample_address():
 
     return Address(
-        street="123 Main Street",
+        address_line_1="123 Main Street",
+        address_line_2="",
         city="Riyadh",
-        state="Riyadh",
+        state_or_province="Riyadh",
         postal_code="12345",
         country="Saudi Arabia",
     )
@@ -150,11 +165,21 @@ def sample_customer(
         customer_id="C000001",
         first_name="John",
         last_name="Smith",
+        date_of_birth=date(
+            1990,
+            1,
+            15,
+        ),
+        gender=Gender.MALE,
+        national_id="1234567890",
         email="john.smith@example.com",
         phone_number="+966500000001",
         address=sample_address,
+        middle_name="",
+        customer_status=CustomerStatus.ACTIVE,
+        registration_date=date.today(),
+        kyc_completed=True,
     )
-
 
 # ================================================================
 # Sample Savings Account

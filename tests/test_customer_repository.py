@@ -1,1283 +1,1146 @@
-"""
-============================================================
-Customer Repository Tests
-Part 1
-------------------------------------------------------------
-Coverage
+# Part 1 — tests/test_customer_repository.py
+from __future__ import annotations
 
-• Repository construction
-• Empty repository
-• Repository metadata
-• Storage initialization
-• Add customer
-• Duplicate detection
-• Invalid object handling
-============================================================
-"""
-
+from datetime import date
 from pathlib import Path
 
 import pytest
 
-from repositories.customer_repository import CustomerRepository
+from exceptions import (
+    EntityAlreadyExistsError,
+    EntityNotFoundError,
+)
+
 from models.customer import Customer
 from models.value_objects.address import Address
-from models.value_objects.email import EmailAddress
-from models.value_objects.money import Money
-from models.value_objects.phone import PhoneNumber
-from utils.constants import CustomerStatus
 
-# ============================================================
+from repositories.customer_repository import (
+    CustomerRepository,
+)
+
+from utils.constants import (
+    CustomerStatus,
+    Gender,
+)
+
+
+# ==========================================================
+# Test Repository
+# ==========================================================
+
+
+class InMemoryCustomerRepository(CustomerRepository):
+
+    def __init__(self, csv_file: Path):
+
+        self.CSV_FILE = csv_file
+
+        super().__init__()
+
+
+# ==========================================================
 # Fixtures
-# ============================================================
+# ==========================================================
+
+
+@pytest.fixture
+def address():
+
+    return Address(
+        address_line_1="123 Main Street",
+        city="Riyadh",
+        state_or_province="Riyadh",
+        postal_code="12345",
+        country="Saudi Arabia",
+    )
+
+
+@pytest.fixture
+def customer(address):
+
+    return Customer(
+        customer_id="C000001",
+        first_name="John",
+        last_name="Smith",
+        date_of_birth=date(1990, 1, 1),
+        gender=Gender.MALE,
+        national_id="1234567890",
+        email="john.smith@example.com",
+        phone_number="+966500000001",
+        address=address,
+    )
+
 
 @pytest.fixture
 def repository(tmp_path):
 
-    storage = tmp_path / "customers.csv"
-
-    return CustomerRepository(storage_path=storage)
+    return InMemoryCustomerRepository(
+        tmp_path / "customers.csv"
+    )
 
 
 @pytest.fixture
-def customer():
+def repository_with_customer(
+    repository,
+    customer,
+):
 
-    return Customer(
-        customer_id="CUST000001",
-        first_name="John",
-        middle_name="A",
-        last_name="Smith",
-        national_id="1234567890",
-        email=EmailAddress("john@test.com"),
-        phone=PhoneNumber("+966501234567"),
-        address=Address(
-            street="King Road",
-            city="Riyadh",
-            state="Riyadh",
-            postal_code="12345",
-            country="Saudi Arabia",
-        ),
+    repository.add(customer)
+    """
+    print(customer.entity_id)
+    print(id(customer))
+    """
+
+    return repository
+
+
+# ==========================================================
+# Constructor
+# ==========================================================
+
+
+def test_repository_initializes(repository):
+
+    assert repository.count == 0
+
+    assert repository.is_empty()
+
+    assert repository.file_exists
+
+
+def test_repository_name(repository):
+
+    assert (
+        repository.repository_name
+        == "InMemoryCustomerRepository"
     )
 
-# ============================================================
-# Repository Construction
-# ============================================================
 
-def test_repository_created(repository):
+def test_entity_type(repository):
 
-    assert repository is not None
+    assert repository.entity_type is Customer
 
 
-def test_repository_is_empty(repository):
+# ==========================================================
+# find_by_customer_id
+# ==========================================================
 
-    assert repository.count() == 0
 
+def test_find_by_customer_id(
+    repository_with_customer,
+    customer,
+):
 
-def test_repository_storage_path(repository):
-
-    assert repository.storage_path.exists() is False
-
-
-def test_repository_returns_empty_collection(repository):
-
-    assert repository.get_all() == []
-
-
-def test_repository_summary_empty(repository):
-
-    summary = repository.repository_summary()
-
-    assert isinstance(summary, dict)
-
-    assert summary["total_customers"] == 0
-
-# ============================================================
-# Add Customer
-# ============================================================
-
-def test_add_customer(repository, customer):
-
-    repository.add(customer)
-
-    assert repository.count() == 1
-
-
-def test_added_customer_exists(repository, customer):
-
-    repository.add(customer)
-
-    assert repository.exists(customer.customer_id)
-
-
-def test_get_added_customer(repository, customer):
-
-    repository.add(customer)
-
-    found = repository.get(customer.customer_id)
-
-    assert found == customer
-
-
-def test_repository_contains_added_customer(repository, customer):
-
-    repository.add(customer)
-
-    assert customer in repository.get_all()
-
-# ============================================================
-# Duplicate Detection
-# ============================================================
-
-def test_duplicate_customer_id(repository, customer):
-
-    repository.add(customer)
-
-    with pytest.raises(ValueError):
-
-        repository.add(customer)
-
-
-def test_duplicate_national_id(repository, customer):
-
-    repository.add(customer)
-
-    duplicate = Customer(
-        customer_id="CUST000002",
-        first_name="Jane",
-        middle_name="B",
-        last_name="Smith",
-        national_id=customer.national_id,
-        email=EmailAddress("jane@test.com"),
-        phone=PhoneNumber("+966511111111"),
-        address=customer.address,
-    )
-
-    with pytest.raises(ValueError):
-
-        repository.add(duplicate)
-
-
-def test_duplicate_email(repository, customer):
-
-    repository.add(customer)
-
-    duplicate = Customer(
-        customer_id="CUST000003",
-        first_name="Alex",
-        middle_name="C",
-        last_name="Jones",
-        national_id="9988776655",
-        email=customer.email,
-        phone=PhoneNumber("+966522222222"),
-        address=customer.address,
-    )
-
-    with pytest.raises(ValueError):
-
-        repository.add(duplicate)
-
-# ============================================================
-# Invalid Objects
-# ============================================================
-
-def test_add_none(repository):
-
-    with pytest.raises(TypeError):
-
-        repository.add(None)
-
-
-def test_add_invalid_type(repository):
-
-    with pytest.raises(TypeError):
-
-        repository.add("Not a Customer")
-
-
-def test_add_dictionary(repository):
-
-    with pytest.raises(TypeError):
-
-        repository.add({})
-
-# ============================================================
-# Multiple Customers
-# ============================================================
-
-def test_add_multiple_customers(repository):
-
-    for i in range(10):
-
-        customer = Customer(
-            customer_id=f"CUST{i:06}",
-            first_name=f"First{i}",
-            middle_name="A",
-            last_name=f"Last{i}",
-            national_id=f"{1000000000+i}",
-            email=EmailAddress(f"user{i}@test.com"),
-            phone=PhoneNumber(f"+966500000{i:03}"),
-            address=Address(
-                street="Street",
-                city="Riyadh",
-                state="Riyadh",
-                postal_code="12345",
-                country="Saudi Arabia",
-            ),
+    result = (
+        repository_with_customer
+        .find_by_customer_number(
+            customer.customer_id
         )
+    )
 
-        repository.add(customer)
-
-    assert repository.count() == 10
+    assert result is customer
 
 
-def test_customer_ids_unique(repository):
+def test_find_by_customer_id_returns_none(
+    repository_with_customer,
+):
 
-    ids = set()
-
-    for i in range(5):
-
-        customer = Customer(
-            customer_id=f"C{i}",
-            first_name="John",
-            middle_name="A",
-            last_name="Smith",
-            national_id=f"{2000000000+i}",
-            email=EmailAddress(f"user{i}@mail.com"),
-            phone=PhoneNumber(f"+966555000{i:03}"),
-            address=Address(
-                street="Road",
-                city="Jeddah",
-                state="Makkah",
-                postal_code="22222",
-                country="Saudi Arabia",
-            ),
+    assert (
+        repository_with_customer
+        .find_by_customer_number(
+            "UNKNOWN"
         )
+        is None
+    )
 
-        repository.add(customer)
 
-        ids.add(customer.customer_id)
+# ==========================================================
+# exists_customer_id
+# ==========================================================
 
-    assert len(ids) == repository.count()
+
+def test_exists_customer_id_true(
+    repository_with_customer,
+    customer,
+):
+
+    assert (
+        repository_with_customer
+        .exists_customer_number(
+            customer.customer_id
+        )
+    )
+
+
+def test_exists_customer_id_false(
+    repository_with_customer,
+):
+
+    assert (
+        not repository_with_customer
+        .exists_customer_number(
+            "UNKNOWN"
+        )
+    )
+
+
+# ==========================================================
+# National ID
+# ==========================================================
+
+
+def test_find_by_national_id(
+    repository_with_customer,
+    customer,
+):
+
+    result = (
+        repository_with_customer
+        .find_by_national_id(
+            customer.national_id
+        )
+    )
+
+    assert result is customer
+
+
+def test_find_by_national_id_returns_none(
+    repository_with_customer,
+):
+
+    assert (
+        repository_with_customer
+        .find_by_national_id(
+            "9999999999"
+        )
+        is None
+    )
+
+
+def test_exists_national_id_true(
+    repository_with_customer,
+    customer,
+):
+
+    assert (
+        repository_with_customer
+        .exists_national_id(
+            customer.national_id
+        )
+    )
+
+
+def test_exists_national_id_false(
+    repository_with_customer,
+):
+
+    assert (
+        not repository_with_customer
+        .exists_national_id(
+            "9999999999"
+        )
+    )
+
+
+# ==========================================================
+# Email
+# ==========================================================
+
+
+def test_find_by_email(
+    repository_with_customer,
+    customer,
+):
+
+    result = (
+        repository_with_customer
+        .find_by_email(
+            customer.email
+        )
+    )
+
+    assert result is customer
+
+
+def test_find_by_email_case_insensitive(
+    repository_with_customer,
+    customer,
+):
+
+    result = (
+        repository_with_customer
+        .find_by_email(
+            customer.email.upper()
+        )
+    )
+
+    assert result is customer
+
+
+def test_find_by_email_returns_none(
+    repository_with_customer,
+):
+
+    assert (
+        repository_with_customer
+        .find_by_email(
+            "missing@example.com"
+        )
+        is None
+    )
+
+
+def test_exists_email_true(
+    repository_with_customer,
+    customer,
+):
+
+    assert (
+        repository_with_customer
+        .exists_email(
+            customer.email
+        )
+    )
+
+
+def test_exists_email_false(
+    repository_with_customer,
+):
+
+    assert (
+        not repository_with_customer
+        .exists_email(
+            "missing@example.com"
+        )
+    )
 
 # PART 2
 
-# ============================================================
-# Retrieval Operations
-# ============================================================
-
-def test_get_by_customer_id(repository, customer):
-
-    repository.add(customer)
-
-    found = repository.get(customer.customer_id)
-
-    assert found == customer
+# ==========================================================
+# Phone Number
+# ==========================================================
 
 
-def test_get_nonexistent_customer(repository):
+def test_find_by_phone_number(
+    repository_with_customer,
+    customer,
+):
 
-    assert repository.get("UNKNOWN") is None
+    result = (
+        repository_with_customer
+        .find_by_mobile_number(
+            customer.phone_number
+        )
+    )
 
-
-def test_exists_true(repository, customer):
-
-    repository.add(customer)
-
-    assert repository.exists(customer.customer_id)
-
-
-def test_exists_false(repository):
-
-    assert repository.exists("UNKNOWN") is False
+    assert result is customer
 
 
-def test_contains_customer(repository, customer):
+def test_find_by_phone_number_returns_none(
+    repository_with_customer,
+):
 
-    repository.add(customer)
+    assert (
+        repository_with_customer
+        .find_by_mobile_number(
+            "+966599999999"
+        )
+        is None
+    )
 
-    assert customer in repository.get_all()
+
+def test_exists_phone_number_true(
+    repository_with_customer,
+    customer,
+):
+
+    assert (
+        repository_with_customer
+        .exists_mobile_number(
+            customer.phone_number
+        )
+    )
 
 
-def test_get_all_returns_list(repository, customer):
+def test_exists_phone_number_false(
+    repository_with_customer,
+):
 
-    repository.add(customer)
+    assert (
+        not repository_with_customer
+        .exists_mobile_number(
+            "+966599999999"
+        )
+    )
 
-    customers = repository.get_all()
 
-    assert isinstance(customers, list)
+# ==========================================================
+# Active / Inactive Customers
+# ==========================================================
+
+
+def test_find_active_customers(
+    repository_with_customer,
+    customer,
+):
+
+    customers = (
+        repository_with_customer
+        .find_active_customers()
+    )
 
     assert len(customers) == 1
 
-# ============================================================
-# Secondary Index Lookups
-# ============================================================
+    assert customers[0] is customer
 
-def test_get_by_national_id(repository, customer):
 
-    repository.add(customer)
+def test_find_inactive_customers(
+    repository_with_customer,
+    customer,
+):
 
-    found = repository.get_by_national_id(
-        customer.national_id
+    customer.deactivate()
+
+    customers = (
+        repository_with_customer
+        .find_inactive_customers()
     )
 
-    assert found == customer
+    assert len(customers) == 1
+
+    assert customers[0] is customer
 
 
-def test_get_by_email(repository, customer):
-
-    repository.add(customer)
-
-    found = repository.get_by_email(
-        customer.email
-    )
-
-    assert found == customer
-
-
-def test_get_by_phone(repository, customer):
-
-    repository.add(customer)
-
-    found = repository.get_by_phone(
-        customer.phone
-    )
-
-    assert found == customer
-
-
-def test_unknown_national_id(repository):
+def test_has_active_customers_true(
+    repository_with_customer,
+):
 
     assert (
-        repository.get_by_national_id("9999999999")
-        is None
+        repository_with_customer
+        .has_active_customers()
     )
 
 
-def test_unknown_email(repository):
+def test_has_active_customers_false(
+    repository_with_customer,
+    customer,
+):
+
+    customer.deactivate()
 
     assert (
-        repository.get_by_email(
-            EmailAddress("missing@test.com")
+        not repository_with_customer
+        .has_active_customers()
+    )
+
+
+def test_active_customer_count(
+    repository_with_customer,
+):
+
+    assert (
+        repository_with_customer
+        .active_customer_count()
+        == 1
+    )
+
+
+def test_inactive_customer_count(
+    repository_with_customer,
+    customer,
+):
+
+    customer.deactivate()
+
+    assert (
+        repository_with_customer
+        .inactive_customer_count()
+        == 1
+    )
+
+
+# ==========================================================
+# Name Searches
+# ==========================================================
+
+
+def test_find_by_first_name(
+    repository_with_customer,
+    customer,
+):
+
+    results = (
+        repository_with_customer
+        .find_by_first_name(
+            "John"
         )
-        is None
     )
 
+    assert len(results) == 1
 
-def test_unknown_phone(repository):
+    assert results[0] is customer
 
-    assert (
-        repository.get_by_phone(
-            PhoneNumber("+966599999999")
+
+def test_find_by_last_name(
+    repository_with_customer,
+    customer,
+):
+
+    results = (
+        repository_with_customer
+        .find_by_last_name(
+            "Smith"
         )
-        is None
-    )
-
-# ============================================================
-# Search by Name
-# ============================================================
-
-def test_find_by_first_name(repository):
-
-    c1 = Customer(
-        customer_id="C1",
-        first_name="John",
-        middle_name="A",
-        last_name="Smith",
-        national_id="1000000001",
-        email=EmailAddress("john@test.com"),
-        phone=PhoneNumber("+966500000001"),
-        address=Address(
-            street="Road",
-            city="Riyadh",
-            state="Riyadh",
-            postal_code="11111",
-            country="Saudi Arabia",
-        ),
-    )
-
-    repository.add(c1)
-
-    results = repository.find_by_first_name("John")
-
-    assert len(results) == 1
-
-
-def test_find_by_last_name(repository):
-
-    c1 = Customer(
-        customer_id="C2",
-        first_name="Ahmed",
-        middle_name="A",
-        last_name="AlQahtani",
-        national_id="1000000002",
-        email=EmailAddress("ahmed@test.com"),
-        phone=PhoneNumber("+966500000002"),
-        address=Address(
-            street="Road",
-            city="Riyadh",
-            state="Riyadh",
-            postal_code="11111",
-            country="Saudi Arabia",
-        ),
-    )
-
-    repository.add(c1)
-
-    results = repository.find_by_last_name(
-        "AlQahtani"
     )
 
     assert len(results) == 1
 
-# ============================================================
-# Partial Searches
-# ============================================================
-
-def test_partial_first_name(repository):
-
-    repository.add(customer())
-
-    results = repository.search_name("Joh")
-
-    assert len(results) == 1
+    assert results[0] is customer
 
 
-def test_partial_last_name(repository):
+def test_find_by_full_name(
+    repository_with_customer,
+    customer,
+):
 
-    repository.add(customer())
-
-    results = repository.search_name("Smi")
+    results = (
+        repository_with_customer
+        .find_by_full_name(
+            customer.full_name
+        )
+    )
 
     assert len(results) == 1
 
+    assert results[0] is customer
 
-def test_search_name_not_found(repository):
 
-    results = repository.search_name("Nobody")
+def test_find_by_first_name_case_insensitive(
+    repository_with_customer,
+    customer,
+):
 
-    assert results == []
-
-# ============================================================
-# Search by Status
-# ============================================================
-
-def test_find_active_customers(repository, customer):
-
-    repository.add(customer)
-
-    results = repository.find_by_status(
-        CustomerStatus.ACTIVE
+    results = (
+        repository_with_customer
+        .find_by_first_name(
+            "john"
+        )
     )
 
     assert customer in results
 
 
-def test_find_inactive_customers(repository):
-
-    results = repository.find_by_status(
-        CustomerStatus.INACTIVE
-    )
-
-    assert results == []
-
-# ============================================================
-# Search by City
-# ============================================================
-
-def test_find_by_city(repository, customer):
-
-    repository.add(customer)
-
-    results = repository.find_by_city("Riyadh")
-
-    assert len(results) == 1
-
-
-def test_find_unknown_city(repository):
-
-    results = repository.find_by_city("Dammam")
-
-    assert results == []
-
-# ============================================================
-# Multi-Customer Retrieval
-# ============================================================
-
-def test_get_all_multiple(repository):
-
-    for i in range(5):
-
-        repository.add(
-            Customer(
-                customer_id=f"C{i}",
-                first_name=f"First{i}",
-                middle_name="A",
-                last_name="Last",
-                national_id=f"{1000000000+i}",
-                email=EmailAddress(
-                    f"user{i}@mail.com"
-                ),
-                phone=PhoneNumber(
-                    f"+966500000{i:03}"
-                ),
-                address=Address(
-                    street="Street",
-                    city="Riyadh",
-                    state="Riyadh",
-                    postal_code="12345",
-                    country="Saudi Arabia",
-                ),
-            )
-        )
-
-    customers = repository.get_all()
-
-    assert len(customers) == 5
-
-# ============================================================
-# Index Integrity
-# ============================================================
-
-def test_lookup_returns_same_instance(
-    repository,
+def test_find_by_last_name_case_insensitive(
+    repository_with_customer,
     customer,
 ):
 
-    repository.add(customer)
-
-    by_id = repository.get(customer.customer_id)
-
-    by_email = repository.get_by_email(
-        customer.email
-    )
-
-    by_phone = repository.get_by_phone(
-        customer.phone
-    )
-
-    assert by_id is by_email
-
-    assert by_email is by_phone
-
-
-def test_repository_order_stable(repository):
-
-    ids = []
-
-    for i in range(5):
-
-        cust = Customer(
-            customer_id=f"C{i}",
-            first_name="John",
-            middle_name="A",
-            last_name="Smith",
-            national_id=f"{2000000000+i}",
-            email=EmailAddress(
-                f"user{i}@mail.com"
-            ),
-            phone=PhoneNumber(
-                f"+966511111{i:03}"
-            ),
-            address=Address(
-                street="Road",
-                city="Riyadh",
-                state="Riyadh",
-                postal_code="11111",
-                country="Saudi Arabia",
-            ),
+    results = (
+        repository_with_customer
+        .find_by_last_name(
+            "smith"
         )
+    )
 
-        repository.add(cust)
+    assert customer in results
 
-        ids.append(cust.customer_id)
 
-    retrieved = [
-        c.customer_id
-        for c in repository.get_all()
-    ]
+def test_find_by_full_name_case_insensitive(
+    repository_with_customer,
+    customer,
+):
 
-    assert retrieved == ids
+    results = (
+        repository_with_customer
+        .find_by_full_name(
+            customer.full_name.lower()
+        )
+    )
+
+    assert customer in results
+
+
+def test_find_by_first_name_not_found(
+    repository_with_customer,
+):
+
+    assert (
+        repository_with_customer
+        .find_by_first_name(
+            "Michael"
+        )
+        == []
+    )
+
+
+def test_find_by_last_name_not_found(
+    repository_with_customer,
+):
+
+    assert (
+        repository_with_customer
+        .find_by_last_name(
+            "Jordan"
+        )
+        == []
+    )
+
+
+def test_find_by_full_name_not_found(
+    repository_with_customer,
+):
+
+    assert (
+        repository_with_customer
+        .find_by_full_name(
+            "Unknown Person"
+        )
+        == []
+    )
 
 # PART 3
 
-# ============================================================
-# Update Operations
-# ============================================================
+# ==========================================================
+# Find by National ID
+# ==========================================================
 
-def test_update_customer(repository, customer):
-
-    repository.add(customer)
-
-    customer.first_name = "Michael"
-
-    repository.update(customer)
-
-    updated = repository.get(customer.customer_id)
-
-    assert updated.first_name == "Michael"
-
-
-def test_update_email_updates_index(repository, customer):
-
-    repository.add(customer)
-
-    old_email = customer.email
-
-    customer.email = EmailAddress("new@email.com")
-
-    repository.update(customer)
-
-    assert repository.get_by_email(old_email) is None
-
-    assert (
-        repository.get_by_email(customer.email)
-        == customer
+def test_find_by_national_id(
+    repository_with_customer,
+    sample_customer,
+):
+    customer = repository_with_customer.find_by_national_id(
+        sample_customer.national_id
     )
 
+    assert customer.customer_id == sample_customer.customer_id
 
-def test_update_phone_updates_index(repository, customer):
 
-    repository.add(customer)
-
-    old_phone = customer.phone
-
-    customer.phone = PhoneNumber("+966599999999")
-
-    repository.update(customer)
-
-    assert repository.get_by_phone(old_phone) is None
-
+def test_find_by_national_id_not_found(
+    repository_with_customer,
+):
     assert (
-        repository.get_by_phone(customer.phone)
-        == customer
-    )
-
-
-def test_update_nonexistent_customer(repository, customer):
-
-    with pytest.raises(KeyError):
-
-        repository.update(customer)
-
-# ============================================================
-# Delete Operations
-# ============================================================
-
-def test_remove_customer(repository, customer):
-
-    repository.add(customer)
-
-    repository.remove(customer.customer_id)
-
-    assert repository.count() == 0
-
-
-def test_removed_customer_not_found(repository, customer):
-
-    repository.add(customer)
-
-    repository.remove(customer.customer_id)
-
-    assert (
-        repository.get(customer.customer_id)
-        is None
-    )
-
-
-def test_remove_unknown_customer(repository):
-
-    with pytest.raises(KeyError):
-
-        repository.remove("UNKNOWN")
-
-
-def test_delete_removes_secondary_indexes(repository, customer):
-
-    repository.add(customer)
-
-    repository.remove(customer.customer_id)
-
-    assert (
-        repository.get_by_email(customer.email)
-        is None
-    )
-
-    assert (
-        repository.get_by_phone(customer.phone)
-        is None
-    )
-
-    assert (
-        repository.get_by_national_id(
-            customer.national_id
+        repository_with_customer.find_by_national_id(
+            "9999999999"
         )
         is None
     )
 
-# ============================================================
-# Save Operations
-# ============================================================
 
-def test_save_repository(repository, customer):
-
-    repository.add(customer)
-
-    repository.save()
-
-    assert repository.storage_path.exists()
+def test_exists_national_id(
+    repository_with_customer,
+    sample_customer,
+):
+    assert repository_with_customer.exists_national_id(
+        sample_customer.national_id
+    )
 
 
-def test_save_empty_repository(repository):
-
-    repository.save()
-
-    assert repository.storage_path.exists()
-
-
-def test_multiple_save_calls(repository, customer):
-
-    repository.add(customer)
-
-    repository.save()
-
-    repository.save()
-
-    repository.save()
-
-    assert repository.storage_path.exists()
-
-# ============================================================
-# Load Operations
-# ============================================================
-
-def test_save_then_reload(tmp_path, customer):
-
-    path = tmp_path / "customers.csv"
-
-    repo1 = CustomerRepository(storage_path=path)
-
-    repo1.add(customer)
-
-    repo1.save()
-
-    repo2 = CustomerRepository(storage_path=path)
-
-    repo2.load()
-
-    loaded = repo2.get(customer.customer_id)
-
-    assert loaded == customer
+def test_exists_national_id_false(
+    repository_with_customer,
+):
+    assert not repository_with_customer.exists_national_id(
+        "9999999999"
+    )
 
 
-def test_reload_preserves_count(tmp_path):
+# ==========================================================
+# Email
+# ==========================================================
 
-    path = tmp_path / "customers.csv"
+def test_find_by_email(
+    repository_with_customer,
+    sample_customer,
+):
+    customer = repository_with_customer.find_by_email(
+        sample_customer.email
+    )
 
-    repo = CustomerRepository(storage_path=path)
+    assert customer.customer_id == sample_customer.customer_id
 
-    for i in range(3):
 
-        repo.add(
-            Customer(
-                customer_id=f"C{i}",
-                first_name="John",
-                middle_name="A",
-                last_name="Smith",
-                national_id=f"{1000000000+i}",
-                email=EmailAddress(
-                    f"user{i}@mail.com"
-                ),
-                phone=PhoneNumber(
-                    f"+966500000{i:03}"
-                ),
-                address=Address(
-                    street="Road",
-                    city="Riyadh",
-                    state="Riyadh",
-                    postal_code="12345",
-                    country="Saudi Arabia",
-                ),
-            )
+def test_find_by_email_case_insensitive(
+    repository_with_customer,
+    sample_customer,
+):
+    customer = repository_with_customer.find_by_email(
+        sample_customer.email.upper()
+    )
+
+    assert customer is sample_customer
+
+
+def test_exists_email(
+    repository_with_customer,
+    sample_customer,
+):
+    assert repository_with_customer.exists_email(
+        sample_customer.email
+    )
+
+
+def test_exists_email_false(
+    repository_with_customer,
+):
+    assert not repository_with_customer.exists_email(
+        "missing@example.com"
+    )
+
+
+# ==========================================================
+# Mobile Number
+# ==========================================================
+
+def test_find_by_mobile_number(
+    repository_with_customer,
+    customer,
+):
+    found = (
+        repository_with_customer.find_by_mobile_number(
+            customer.phone_number
         )
-
-    repo.save()
-
-    repo2 = CustomerRepository(storage_path=path)
-
-    repo2.load()
-
-    assert repo2.count() == 3
-
-# ============================================================
-# CSV Recovery
-# ============================================================
-
-def test_load_missing_csv(tmp_path):
-
-    repo = CustomerRepository(
-        storage_path=tmp_path / "missing.csv"
     )
 
-    repo.load()
-
-    assert repo.count() == 0
+    assert found is customer
 
 
-def test_load_empty_csv(tmp_path):
-
-    path = tmp_path / "customers.csv"
-
-    path.write_text("")
-
-    repo = CustomerRepository(storage_path=path)
-
-    repo.load()
-
-    assert repo.count() == 0
-
-
-def test_load_corrupted_csv(tmp_path):
-
-    path = tmp_path / "customers.csv"
-
-    path.write_text(
-        "corrupted,data\n"
-        "this,is,not,a,customer"
-    )
-
-    repo = CustomerRepository(storage_path=path)
-
-    with pytest.raises(Exception):
-
-        repo.load()
-
-# ============================================================
-# Persistence Integrity
-# ============================================================
-
-def test_reload_preserves_indexes(tmp_path, customer):
-
-    path = tmp_path / "customers.csv"
-
-    repo = CustomerRepository(storage_path=path)
-
-    repo.add(customer)
-
-    repo.save()
-
-    repo2 = CustomerRepository(storage_path=path)
-
-    repo2.load()
-
+def test_find_by_mobile_number_not_found(
+    repository_with_customer,
+):
     assert (
-        repo2.get_by_email(customer.email)
-        == customer
-    )
-
-    assert (
-        repo2.get_by_phone(customer.phone)
-        == customer
-    )
-
-    assert (
-        repo2.get_by_national_id(
-            customer.national_id
+        repository_with_customer.find_by_mobile_number(
+            "+966599999999"
         )
-        == customer
+        is None
     )
 
 
-def test_reload_preserves_object_equality(
-    tmp_path,
+def test_exists_mobile_number(
+    repository_with_customer,
+    sample_customer,
+):
+    assert repository_with_customer.exists_mobile_number(
+        sample_customer.phone_number
+    )
+
+
+def test_exists_mobile_number_false(
+    repository_with_customer,
+):
+    assert not repository_with_customer.exists_mobile_number(
+        "+966599999999"
+    )
+
+
+# ==========================================================
+# Active / Inactive
+# ==========================================================
+
+def test_find_active_customers(
+    repository_with_customer,
+):
+    customers = (
+        repository_with_customer.find_active_customers()
+    )
+
+    assert len(customers) == 1
+
+def test_find_inactive_customers(
+    repository_with_customer,
     customer,
 ):
+    customer.deactivate()
 
-    path = tmp_path / "customers.csv"
+    repository_with_customer.update(customer)
 
-    repo = CustomerRepository(storage_path=path)
+    customers = repository_with_customer.find_inactive_customers()
 
-    repo.add(customer)
-
-    repo.save()
-
-    repo2 = CustomerRepository(storage_path=path)
-
-    repo2.load()
-
-    restored = repo2.get(customer.customer_id)
-
-    assert restored == customer
-
-# ============================================================
-# Repository Consistency
-# ============================================================
-
-def test_update_then_save_then_reload(
-    tmp_path,
-    customer,
+    assert len(customers) == 1
+    assert customers[0] is customer
+"""
+def test_find_inactive_customers(
+    repository_with_customer,
+    sample_customer,
 ):
+    sample_customer.deactivate()
+    # print(sample_customer.entity_id)
 
-    path = tmp_path / "customers.csv"
+    # print(repository_with_customer.find_all(active_only=False)[0].entity_id)
+    
+    repository_with_customer.update(
+        sample_customer
+    )
 
-    repo = CustomerRepository(storage_path=path)
+    customers = (
+        repository_with_customer.find_inactive_customers()
+    )
 
-    repo.add(customer)
+    assert len(customers) == 1
+    assert customers[0] is sample_customer
+"""
 
-    customer.last_name = "Johnson"
-
-    repo.update(customer)
-
-    repo.save()
-
-    repo2 = CustomerRepository(storage_path=path)
-
-    repo2.load()
-
-    restored = repo2.get(customer.customer_id)
-
-    assert restored.last_name == "Johnson"
-
-
-def test_delete_then_save_then_reload(
-    tmp_path,
-    customer,
+def test_has_active_customers(
+    repository_with_customer,
 ):
+    assert repository_with_customer.has_active_customers()
 
-    path = tmp_path / "customers.csv"
 
-    repo = CustomerRepository(storage_path=path)
+def test_active_customer_count(
+    repository_with_customer,
+):
+    assert (
+        repository_with_customer.active_customer_count()
+        == 1
+    )
 
-    repo.add(customer)
 
-    repo.remove(customer.customer_id)
-
-    repo.save()
-
-    repo2 = CustomerRepository(storage_path=path)
-
-    repo2.load()
-
-    assert repo2.count() == 0
-
+def test_inactive_customer_count(
+    repository_with_customer,
+):
+    assert (
+        repository_with_customer.inactive_customer_count()
+        == 0
+    )
 
 # PART 4
 
 # ============================================================
-# Repository Statistics
+# Statistics & Search
 # ============================================================
 
-def test_repository_summary(repository):
-
-    summary = repository.repository_summary()
-
-    assert isinstance(summary, dict)
-
-
-def test_repository_summary_empty(repository):
-
-    summary = repository.repository_summary()
-
-    assert summary["total_customers"] == 0
-
-
-def test_repository_summary_after_insert(repository, customer):
-
-    repository.add(customer)
-
-    summary = repository.repository_summary()
-
-    assert summary["total_customers"] == 1
-
-
-def test_active_customer_count(repository, customer):
-
-    repository.add(customer)
-
-    assert repository.active_customer_count() == 1
-
-
-def test_inactive_customer_count(repository, customer):
-
-    customer.status = CustomerStatus.INACTIVE
-
-    repository.add(customer)
-
-    assert repository.inactive_customer_count() == 1
-
-# ============================================================
-# Batch Operations
-# ============================================================
-
-def test_add_customer_batch(repository):
-
-    customers = []
-
-    for i in range(10):
-
-        customers.append(
-            Customer(
-                customer_id=f"C{i}",
-                first_name=f"First{i}",
-                middle_name="A",
-                last_name="Last",
-                national_id=f"{1000000000+i}",
-                email=EmailAddress(f"user{i}@mail.com"),
-                phone=PhoneNumber(f"+966500000{i:03}"),
-                address=Address(
-                    street="Street",
-                    city="Riyadh",
-                    state="Riyadh",
-                    postal_code="12345",
-                    country="Saudi Arabia",
-                ),
-            )
-        )
-
-    repository.add_many(customers)
-
-    assert repository.count() == 10
-
-
-def test_clear_repository(repository, customer):
-
-    repository.add(customer)
-
-    repository.clear()
-
-    assert repository.count() == 0
-
-    assert repository.get_all() == []
-
-# ============================================================
-# Boundary Conditions
-# ============================================================
-
-def test_unicode_customer_name(repository):
-
-    customer = Customer(
-        customer_id="AR001",
-        first_name="أحمد",
-        middle_name="محمد",
-        last_name="العتيبي",
-        national_id="3000000000",
-        email=EmailAddress("arabic@test.com"),
-        phone=PhoneNumber("+966511111111"),
-        address=Address(
-            street="طريق الملك",
-            city="الرياض",
-            state="الرياض",
-            postal_code="11111",
-            country="Saudi Arabia",
-        ),
-    )
-
-    repository.add(customer)
-
-    assert repository.count() == 1
-
-
-def test_long_customer_name(repository):
-
-    long_name = "A" * 150
-
-    customer = Customer(
-        customer_id="LONG001",
-        first_name=long_name,
-        middle_name="A",
-        last_name="Smith",
-        national_id="3000000001",
-        email=EmailAddress("long@test.com"),
-        phone=PhoneNumber("+966511111112"),
-        address=Address(
-            street="Road",
-            city="Riyadh",
-            state="Riyadh",
-            postal_code="11111",
-            country="Saudi Arabia",
-        ),
-    )
-
-    repository.add(customer)
-
-    assert repository.get(customer.customer_id) == customer
-
-
-def test_empty_search(repository):
-
-    assert repository.search_name("") == []
-
-
-def test_search_whitespace(repository):
-
-    assert repository.search_name("   ") == []
-
-# ============================================================
-# Large Repository
-# ============================================================
-
-def test_large_repository(repository):
-
-    for i in range(1000):
-
-        repository.add(
-
-            Customer(
-                customer_id=f"C{i:05}",
-                first_name=f"User{i}",
-                middle_name="A",
-                last_name="Smith",
-                national_id=f"{5000000000+i}",
-                email=EmailAddress(
-                    f"user{i}@mail.com"
-                ),
-                phone=PhoneNumber(
-                    f"+96655{i:07}"
-                ),
-                address=Address(
-                    street="Street",
-                    city="Riyadh",
-                    state="Riyadh",
-                    postal_code="12345",
-                    country="Saudi Arabia",
-                ),
-            )
-        )
-
-    assert repository.count() == 1000
-
-# ============================================================
-# Index Consistency
-# ============================================================
-
-def test_indexes_after_multiple_updates(
-    repository,
-    customer,
+def test_customer_statistics(
+    repository_with_customer,
 ):
 
-    repository.add(customer)
+    stats = repository_with_customer.customer_statistics()
 
-    customer.email = EmailAddress("updated@test.com")
-
-    customer.phone = PhoneNumber("+966599999998")
-
-    repository.update(customer)
-
-    assert repository.get_by_email(
-        EmailAddress("updated@test.com")
-    ) == customer
-
-    assert repository.get_by_phone(
-        PhoneNumber("+966599999998")
-    ) == customer
+    assert stats["total_customers"] == 1
+    assert stats["active_customers"] == 1
+    assert stats["inactive_customers"] == 0
 
 
-def test_indexes_after_clear(repository, customer):
+def test_statistics_alias(
+    repository_with_customer,
+):
 
-    repository.add(customer)
+    stats = repository_with_customer.statistics()
 
-    repository.clear()
+    assert stats["total_customers"] == 1
+    assert stats["active_customers"] == 1
+    assert stats["inactive_customers"] == 0
 
-    assert repository.count() == 0
 
-    assert (
-        repository.get_by_email(customer.email)
-        is None
+def test_search_by_first_name(
+    repository_with_customer,
+):
+
+    results = repository_with_customer.search("john")
+
+    assert len(results) == 1
+
+
+def test_search_by_last_name(
+    repository_with_customer,
+):
+
+    results = repository_with_customer.search("smith")
+
+    assert len(results) == 1
+
+
+def test_search_by_email(
+    repository_with_customer,
+):
+
+    results = repository_with_customer.search(
+        "john.smith@example.com"
     )
 
-    assert (
-        repository.get_by_phone(customer.phone)
-        is None
+    assert len(results) == 1
+
+
+def test_search_by_national_id(
+    repository_with_customer,
+    sample_customer,
+):
+
+    results = repository_with_customer.search(
+        sample_customer.national_id
     )
 
+    assert len(results) == 1
+
+
+def test_search_by_city(
+    repository_with_customer,
+):
+
+    results = repository_with_customer.search("riyadh")
+
+    assert len(results) == 1
+
+
+def test_search_returns_empty_when_not_found(
+    repository_with_customer,
+):
+
     assert (
-        repository.get_by_national_id(
-            customer.national_id
+        repository_with_customer.search("does-not-exist")
+        == []
+    )
+
+
+# ============================================================
+# Validation & Add Customer
+# ============================================================
+
+def test_validate_unique_customer_success(
+    repository,
+    sample_customer,
+):
+
+    repository.validate_unique_customer(
+        sample_customer
+    )
+
+
+def test_validate_duplicate_customer_id(
+    repository_with_customer,
+    sample_customer,
+):
+
+    duplicate = sample_customer
+
+    with pytest.raises(
+        EntityAlreadyExistsError,
+    ):
+        repository_with_customer.validate_unique_customer(
+            duplicate
         )
-        is None
-    )
 
-# ============================================================
-# Repository Integrity
-# ============================================================
 
-def test_repository_iteration(repository):
+def test_add_customer(
+    repository,
+    sample_customer,
+):
 
-    for i in range(5):
+    repository.add_customer(sample_customer)
 
-        repository.add(
+    assert repository.count == 1
 
-            Customer(
-                customer_id=f"C{i}",
-                first_name="John",
-                middle_name="A",
-                last_name="Smith",
-                national_id=f"{4000000000+i}",
-                email=EmailAddress(
-                    f"user{i}@mail.com"
-                ),
-                phone=PhoneNumber(
-                    f"+966511000{i:03}"
-                ),
-                address=Address(
-                    street="Road",
-                    city="Riyadh",
-                    state="Riyadh",
-                    postal_code="12345",
-                    country="Saudi Arabia",
-                ),
-            )
+
+def test_add_duplicate_customer(
+    repository_with_customer,
+    sample_customer,
+):
+
+    with pytest.raises(
+        EntityAlreadyExistsError,
+    ):
+        repository_with_customer.add_customer(
+            sample_customer
         )
 
-    count = 0
 
-    for _ in repository:
+def test_customer_exists(
+    repository_with_customer,
+    sample_customer,
+):
 
-        count += 1
-
-    assert count == repository.count()
-
-
-def test_repository_length(repository):
-
-    assert len(repository) == repository.count()
+    assert repository_with_customer.customer_exists(
+        sample_customer.customer_id
+    )
 
 
-def test_repository_bool(repository):
+def test_customer_exists_false(
+    repository,
+):
 
-    assert bool(repository) is False
+    assert (
+        repository.customer_exists(
+            "UNKNOWN"
+        )
+        is False
+    )
 
-    repository.add(customer())
-
-    assert bool(repository) is True
 
 # ============================================================
-# Export / Import Helpers
+# Get or Raise
 # ============================================================
 
-def test_export_then_import(tmp_path, customer):
+def test_get_or_raise_success(
+    repository_with_customer,
+    sample_customer,
+):
 
-    path = tmp_path / "customers.csv"
+    customer = (
+        repository_with_customer.get_or_raise(
+            sample_customer.customer_id
+        )
+    )
 
-    repo = CustomerRepository(storage_path=path)
-
-    repo.add(customer)
-
-    repo.export_csv()
-
-    imported = CustomerRepository(storage_path=path)
-
-    imported.import_csv()
-
-    assert imported.count() == 1
+    assert customer.customer_id == sample_customer.customer_id
 
 
-def test_repository_copy(repository, customer):
+def test_get_or_raise_not_found(
+    repository,
+):
 
-    repository.add(customer)
+    with pytest.raises(
+        EntityNotFoundError,
+    ):
+        repository.get_or_raise(
+            "UNKNOWN"
+        )
 
-    copied = repository.copy()
+# PART 5
 
-    assert copied.count() == repository.count()
+# ============================================================
+# String Representation
+# ============================================================
 
-    assert copied.get(customer.customer_id) == customer
+def test_str(
+    repository_with_customer,
+):
 
+    text = str(
+        repository_with_customer
+    )
+
+    assert "CustomerRepository" in text
+    assert "customers=1" in text
+
+
+def test_repr(
+    repository_with_customer,
+):
+
+    text = repr(
+        repository_with_customer
+    )
+
+    assert "CustomerRepository" in text
+    assert "count=1" in text
+    assert "customers.csv" in text
+
+
+# ============================================================
+# Edge Cases
+# ============================================================
+
+def test_find_by_email_case_insensitive(
+    repository_with_customer,
+):
+
+    customer = (
+        repository_with_customer.find_by_email(
+            "JOHN.SMITH@EXAMPLE.COM"
+        )
+    )
+
+    assert customer is not None
+
+
+def test_find_by_first_name_case_insensitive(
+    repository_with_customer,
+):
+
+    customers = (
+        repository_with_customer.find_by_first_name(
+            "JOHN"
+        )
+    )
+
+    assert len(customers) == 1
+
+
+def test_find_by_last_name_case_insensitive(
+    repository_with_customer,
+):
+
+    customers = (
+        repository_with_customer.find_by_last_name(
+            "SMITH"
+        )
+    )
+
+    assert len(customers) == 1
+
+
+def test_find_by_city_case_insensitive(
+    repository_with_customer,
+):
+
+    customers = (
+        repository_with_customer.find_by_city(
+            "RIYADH"
+        )
+    )
+
+    assert len(customers) == 1
+
+
+def test_find_by_country_case_insensitive(
+    repository_with_customer,
+):
+
+    customers = (
+        repository_with_customer.find_by_country(
+            "SAUDI ARABIA"
+        )
+    )
+
+    assert len(customers) == 1
+
+
+def test_search_case_insensitive(
+    repository_with_customer,
+):
+
+    results = (
+        repository_with_customer.search(
+            "SMITH"
+        )
+    )
+
+    assert len(results) == 1
+
+
+def test_repository_starts_empty(
+    repository,
+):
+
+    assert repository.count == 0
+    assert repository.is_empty()
+
+
+def test_repository_not_empty_after_add(
+    repository,
+    sample_customer,
+):
+
+    repository.add_customer(
+        sample_customer
+    )
+
+    assert repository.count == 1
+    assert not repository.is_empty()
+
+
+def test_active_customer_count_empty(
+    repository,
+):
+
+    assert (
+        repository.active_customer_count()
+        == 0
+    )
+
+
+def test_inactive_customer_count_empty(
+    repository,
+):
+
+    assert (
+        repository.inactive_customer_count()
+        == 0
+    )

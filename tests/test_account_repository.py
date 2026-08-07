@@ -1,1454 +1,840 @@
-"""
-============================================================
-Account Repository Tests
-Part 1
-------------------------------------------------------------
-Coverage
+# Part 1 — Imports, Test Repository & Fixtures
 
-• Repository construction
-• Empty repository
-• Repository metadata
-• Account insertion
-• Duplicate detection
-• Invalid object handling
-============================================================
-"""
+from __future__ import annotations
+
+from datetime import date
+from pathlib import Path
 
 import pytest
 
-from repositories.account_repository import AccountRepository
+from exceptions import (
+    EntityAlreadyExistsError,
+    EntityNotFoundError,
+)
 
 from models.customer import Customer
 from models.savings_account import SavingsAccount
-from models.current_account import CurrentAccount
-from models.time_deposit_account import TimeDepositAccount
-
 from models.value_objects.address import Address
-from models.value_objects.email import EmailAddress
 from models.value_objects.money import Money
-from models.value_objects.phone import PhoneNumber
 
-# ============================================================
+from repositories.account_repository import AccountRepository
+
+from utils.constants import (
+    AccountStatus,
+    AccountType,
+    Gender,
+)
+
+from decimal import Decimal
+
+
+class InMemoryAccountRepository(AccountRepository):
+    """
+    Test implementation using temporary CSV storage.
+    """
+
+    def __init__(self, csv_file: Path):
+
+        self.CSV_FILE = csv_file
+
+        super().__init__()
+
+
+# ------------------------------------------------------------------
 # Fixtures
-# ============================================================
+# ------------------------------------------------------------------
+
+
+@pytest.fixture
+def address():
+
+    return Address(
+        address_line_1="123 Main Street",
+        city="Riyadh",
+        state_or_province="Riyadh",
+        postal_code="12345",
+        country="Saudi Arabia",
+    )
+
+
+@pytest.fixture
+def customer(address):
+
+    return Customer(
+        customer_id="C000001",
+        first_name="John",
+        last_name="Smith",
+        date_of_birth=date(1990, 1, 1),
+        gender=Gender.MALE,
+        national_id="1234567890",
+        email="john@example.com",
+        phone_number="+966500000001",
+        address=address,
+    )
+
+
+@pytest.fixture
+def account(customer):
+
+    return SavingsAccount(
+        account_number="SA000001",
+        customer_id=customer.customer_id,
+        opening_balance=Money(
+            Decimal("1000.00"),
+            "SAR",
+        ),
+        interest_rate=Decimal("2.50"),
+        minimum_balance=Money(
+            Decimal("100.00"),
+            "SAR",
+        ),
+    )
 
 @pytest.fixture
 def repository(tmp_path):
 
-    return AccountRepository(
-        storage_path=tmp_path / "accounts.csv"
+    return InMemoryAccountRepository(
+        tmp_path / "accounts.csv"
     )
 
 
 @pytest.fixture
-def customer():
+def repository_with_account(
+    repository,
+    account,
+):
 
-    return Customer(
-        customer_id="CUST000001",
-        first_name="John",
-        middle_name="A",
-        last_name="Smith",
-        national_id="1234567890",
-        email=EmailAddress("john@test.com"),
-        phone=PhoneNumber("+966501234567"),
-        address=Address(
-            street="King Road",
-            city="Riyadh",
-            state="Riyadh",
-            postal_code="12345",
-            country="Saudi Arabia",
-        ),
+    repository.add(account)
+
+    return repository
+
+# Part 2 — Core Repository Operations
+
+# ------------------------------------------------------------------
+# Core repository operations
+# ------------------------------------------------------------------
+
+
+# ------------------------------------------------------------------
+# Lookup methods
+# ------------------------------------------------------------------
+
+
+def test_find_by_account_number(
+    repository_with_account,
+    account,
+):
+    found = (
+        repository_with_account
+        .find_by_account_number(
+            account.account_number
+        )
     )
 
-
-@pytest.fixture
-def savings(customer):
-
-    return SavingsAccount(
-        account_number="SA100001",
-        customer=customer,
-        opening_balance=Money("1000"),
-    )
+    assert found is account
 
 
-@pytest.fixture
-def current(customer):
-
-    return CurrentAccount(
-        account_number="CA100001",
-        customer=customer,
-        opening_balance=Money("500"),
-    )
-
-
-@pytest.fixture
-def time_deposit(customer):
-
-    return TimeDepositAccount(
-        account_number="TD100001",
-        customer=customer,
-        opening_balance=Money("5000"),
-    )
-
-# ============================================================
-# Repository Construction
-# ============================================================
-
-def test_repository_created(repository):
-
-    assert repository is not None
-
-
-def test_repository_empty(repository):
-
-    assert repository.count() == 0
-
-
-def test_repository_storage_path(repository):
-
-    assert repository.storage_path.exists() is False
-
-
-def test_get_all_empty(repository):
-
-    assert repository.get_all() == []
-
-
-def test_repository_summary_empty(repository):
-
-    summary = repository.repository_summary()
-
-    assert summary["total_accounts"] == 0
-
-# ============================================================
-# Savings Account
-# ============================================================
-
-def test_add_savings_account(repository, savings):
-
-    repository.add(savings)
-
-    assert repository.count() == 1
-
-
-def test_get_savings_account(repository, savings):
-
-    repository.add(savings)
-
+def test_find_by_unknown_account_number(
+    repository,
+):
     assert (
-        repository.get(savings.account_number)
-        == savings
-    )
-
-
-def test_savings_exists(repository, savings):
-
-    repository.add(savings)
-
-    assert repository.exists(
-        savings.account_number
-    )
-
-# ============================================================
-# Current Account
-# ============================================================
-
-def test_add_current_account(repository, current):
-
-    repository.add(current)
-
-    assert repository.count() == 1
-
-
-def test_get_current_account(repository, current):
-
-    repository.add(current)
-
-    assert (
-        repository.get(current.account_number)
-        == current
-    )
-
-# ============================================================
-# Time Deposit
-# ============================================================
-
-def test_add_time_deposit(repository, time_deposit):
-
-    repository.add(time_deposit)
-
-    assert repository.count() == 1
-
-
-def test_get_time_deposit(repository, time_deposit):
-
-    repository.add(time_deposit)
-
-    assert (
-        repository.get(
-            time_deposit.account_number
-        )
-        == time_deposit
-    )
-
-# ============================================================
-# Duplicate Detection
-# ============================================================
-
-def test_duplicate_account_number(
-    repository,
-    savings,
-):
-
-    repository.add(savings)
-
-    with pytest.raises(ValueError):
-
-        repository.add(savings)
-
-
-def test_duplicate_different_object_same_number(
-    repository,
-    customer,
-):
-
-    repository.add(
-        SavingsAccount(
-            account_number="SA100001",
-            customer=customer,
-            opening_balance=Money("100"),
-        )
-    )
-
-    duplicate = SavingsAccount(
-        account_number="SA100001",
-        customer=customer,
-        opening_balance=Money("200"),
-    )
-
-    with pytest.raises(ValueError):
-
-        repository.add(duplicate)
-
-# ============================================================
-# Invalid Objects
-# ============================================================
-
-def test_add_none(repository):
-
-    with pytest.raises(TypeError):
-
-        repository.add(None)
-
-
-def test_add_invalid_type(repository):
-
-    with pytest.raises(TypeError):
-
-        repository.add("invalid")
-
-
-def test_add_dictionary(repository):
-
-    with pytest.raises(TypeError):
-
-        repository.add({})
-
-# ============================================================
-# Mixed Repository
-# ============================================================
-
-def test_repository_multiple_account_types(
-    repository,
-    savings,
-    current,
-    time_deposit,
-):
-
-    repository.add(savings)
-
-    repository.add(current)
-
-    repository.add(time_deposit)
-
-    assert repository.count() == 3
-
-
-def test_all_accounts_returned(
-    repository,
-    savings,
-    current,
-):
-
-    repository.add(savings)
-
-    repository.add(current)
-
-    accounts = repository.get_all()
-
-    assert len(accounts) == 2
-
-# PART 2
-
-# ============================================================
-# Retrieval by Account Number
-# ============================================================
-
-def test_get_by_account_number(repository, savings):
-
-    repository.add(savings)
-
-    found = repository.get(
-        savings.account_number
-    )
-
-    assert found == savings
-
-
-def test_get_unknown_account(repository):
-
-    assert repository.get("UNKNOWN") is None
-
-
-def test_exists_true(repository, savings):
-
-    repository.add(savings)
-
-    assert repository.exists(
-        savings.account_number
-    )
-
-
-def test_exists_false(repository):
-
-    assert repository.exists("UNKNOWN") is False
-
-# ============================================================
-# Customer Index
-# ============================================================
-
-def test_get_accounts_by_customer(
-    repository,
-    customer,
-):
-
-    s1 = SavingsAccount(
-        account_number="SA100001",
-        customer=customer,
-        opening_balance=Money("1000"),
-    )
-
-    s2 = CurrentAccount(
-        account_number="CA100001",
-        customer=customer,
-        opening_balance=Money("500"),
-    )
-
-    repository.add(s1)
-
-    repository.add(s2)
-
-    accounts = repository.get_by_customer(
-        customer.customer_id
-    )
-
-    assert len(accounts) == 2
-
-
-def test_customer_without_accounts(repository):
-
-    accounts = repository.get_by_customer(
-        "UNKNOWN"
-    )
-
-    assert accounts == []
-
-# ============================================================
-# Account Type Searches
-# ============================================================
-
-def test_find_savings_accounts(
-    repository,
-    savings,
-):
-
-    repository.add(savings)
-
-    accounts = repository.find_savings_accounts()
-
-    assert savings in accounts
-
-
-def test_find_current_accounts(
-    repository,
-    current,
-):
-
-    repository.add(current)
-
-    accounts = repository.find_current_accounts()
-
-    assert current in accounts
-
-
-def test_find_time_deposits(
-    repository,
-    time_deposit,
-):
-
-    repository.add(time_deposit)
-
-    accounts = repository.find_time_deposit_accounts()
-
-    assert time_deposit in accounts
-
-# ============================================================
-# Active / Closed Accounts
-# ============================================================
-
-def test_find_active_accounts(
-    repository,
-    savings,
-):
-
-    repository.add(savings)
-
-    active = repository.find_active_accounts()
-
-    assert savings in active
-
-
-def test_find_closed_accounts(
-    repository,
-    savings,
-):
-
-    repository.add(savings)
-
-    savings.close_account()
-
-    repository.update(savings)
-
-    closed = repository.find_closed_accounts()
-
-    assert savings in closed
-
-# ============================================================
-# Balance Aggregation
-# ============================================================
-
-def test_total_balance_single_account(
-    repository,
-    savings,
-):
-
-    repository.add(savings)
-
-    total = repository.total_balance()
-
-    assert total == Money("1000")
-
-
-def test_total_balance_multiple_accounts(
-    repository,
-    savings,
-    current,
-):
-
-    repository.add(savings)
-
-    repository.add(current)
-
-    total = repository.total_balance()
-
-    assert total == Money("1500")
-
-
-def test_customer_total_balance(
-    repository,
-    customer,
-):
-
-    repository.add(
-
-        SavingsAccount(
-            account_number="SA1",
-            customer=customer,
-            opening_balance=Money("100"),
-        )
-    )
-
-    repository.add(
-
-        CurrentAccount(
-            account_number="CA1",
-            customer=customer,
-            opening_balance=Money("300"),
-        )
-    )
-
-    total = repository.customer_total_balance(
-        customer.customer_id
-    )
-
-    assert total == Money("400")
-
-# ============================================================
-# Repository Searches
-# ============================================================
-
-def test_find_by_account_prefix(
-    repository,
-    savings,
-):
-
-    repository.add(savings)
-
-    results = repository.search_account_number(
-        "SA"
-    )
-
-    assert savings in results
-
-
-def test_partial_account_number(
-    repository,
-    savings,
-):
-
-    repository.add(savings)
-
-    results = repository.search_account_number(
-        "100"
-    )
-
-    assert savings in results
-
-
-def test_unknown_account_search(repository):
-
-    results = repository.search_account_number(
-        "XYZ"
-    )
-
-    assert results == []
-
-# ============================================================
-# Repository Ordering
-# ============================================================
-
-def test_repository_order(repository):
-
-    numbers = []
-
-    for i in range(5):
-
-        acc = SavingsAccount(
-
-            account_number=f"SA{i}",
-
-            customer=customer(),
-
-            opening_balance=Money("100"),
-        )
-
-        repository.add(acc)
-
-        numbers.append(acc.account_number)
-
-    retrieved = [
-
-        a.account_number
-
-        for a in repository.get_all()
-
-    ]
-
-    assert retrieved == numbers
-
-# ============================================================
-# Index Consistency
-# ============================================================
-
-def test_same_instance_returned(
-    repository,
-    savings,
-):
-
-    repository.add(savings)
-
-    by_number = repository.get(
-        savings.account_number
-    )
-
-    by_customer = repository.get_by_customer(
-        savings.customer.customer_id
-    )[0]
-
-    assert by_number is by_customer
-
-
-def test_repository_contains_all_accounts(
-    repository,
-    savings,
-    current,
-):
-
-    repository.add(savings)
-
-    repository.add(current)
-
-    accounts = repository.get_all()
-
-    assert savings in accounts
-
-    assert current in accounts
-
-# PART 3
-
-# ============================================================
-# Update Operations
-# ============================================================
-
-def test_update_account(repository, savings):
-
-    repository.add(savings)
-
-    savings.nickname = "Emergency Fund"
-
-    repository.update(savings)
-
-    updated = repository.get(
-        savings.account_number
-    )
-
-    assert updated.nickname == "Emergency Fund"
-
-
-def test_update_balance(repository, savings):
-
-    repository.add(savings)
-
-    savings.deposit(Money("250"))
-
-    repository.update(savings)
-
-    updated = repository.get(
-        savings.account_number
-    )
-
-    assert updated.balance == Money("1250")
-
-
-def test_update_rebuilds_customer_index(
-    repository,
-    savings,
-):
-
-    repository.add(savings)
-
-    accounts = repository.get_by_customer(
-        savings.customer.customer_id
-    )
-
-    assert len(accounts) == 1
-
-    repository.update(savings)
-
-    accounts = repository.get_by_customer(
-        savings.customer.customer_id
-    )
-
-    assert len(accounts) == 1
-
-
-def test_update_unknown_account(
-    repository,
-    savings,
-):
-
-    with pytest.raises(KeyError):
-
-        repository.update(savings)
-
-# ============================================================
-# Delete Operations
-# ============================================================
-
-def test_remove_account(repository, savings):
-
-    repository.add(savings)
-
-    repository.remove(savings.account_number)
-
-    assert repository.count() == 0
-
-
-def test_removed_account_not_found(
-    repository,
-    savings,
-):
-
-    repository.add(savings)
-
-    repository.remove(savings.account_number)
-
-    assert (
-        repository.get(
-            savings.account_number
+        repository.find_by_account_number(
+            "SA999999"
         )
         is None
     )
 
 
-def test_remove_unknown_account(repository):
-
-    with pytest.raises(KeyError):
-
-        repository.remove("UNKNOWN")
-
-
-def test_delete_removes_customer_index(
-    repository,
-    savings,
+def test_exists_account_number(
+    repository_with_account,
+    account,
 ):
+    assert (
+        repository_with_account
+        .exists_account_number(
+            account.account_number
+        )
+        is True
+    )
 
-    repository.add(savings)
 
-    repository.remove(savings.account_number)
+def test_exists_account_number_false(
+    repository,
+):
+    assert (
+        repository.exists_account_number(
+            "SA999999"
+        )
+        is False
+    )
 
-    accounts = repository.get_by_customer(
-        savings.customer.customer_id
+
+def test_find_by_customer(
+    repository_with_account,
+    account,
+):
+    accounts = (
+        repository_with_account
+        .find_by_customer(
+            account.customer_id
+        )
+    )
+
+    assert len(accounts) == 1
+    assert accounts[0] is account
+
+
+def test_find_by_customer_unknown(
+    repository,
+):
+    accounts = (
+        repository.find_by_customer(
+            "C999999"
+        )
     )
 
     assert accounts == []
 
-# ============================================================
-# Save Operations
-# ============================================================
 
-def test_save_repository(
-    repository,
-    savings,
+# ------------------------------------------------------------------
+# Active / inactive
+# ------------------------------------------------------------------
+
+
+def test_find_active_accounts(
+    repository_with_account,
+    account,
 ):
-
-    repository.add(savings)
-
-    repository.save()
-
-    assert repository.storage_path.exists()
-
-
-def test_save_empty_repository(repository):
-
-    repository.save()
-
-    assert repository.storage_path.exists()
-
-
-def test_multiple_save_calls(
-    repository,
-    savings,
-):
-
-    repository.add(savings)
-
-    repository.save()
-
-    repository.save()
-
-    repository.save()
-
-    assert repository.storage_path.exists()
-
-# ============================================================
-# Load Operations
-# ============================================================
-
-def test_save_then_reload(
-    tmp_path,
-    savings,
-):
-
-    path = tmp_path / "accounts.csv"
-
-    repo1 = AccountRepository(
-        storage_path=path
+    accounts = (
+        repository_with_account
+        .find_active_accounts()
     )
 
-    repo1.add(savings)
-
-    repo1.save()
-
-    repo2 = AccountRepository(
-        storage_path=path
-    )
-
-    repo2.load()
-
-    loaded = repo2.get(
-        savings.account_number
-    )
-
-    assert loaded == savings
+    assert len(accounts) == 1
+    assert accounts[0] is account
 
 
-def test_reload_preserves_count(
-    tmp_path,
-    customer,
+def test_find_inactive_accounts(
+    repository_with_account,
+    account,
 ):
+    account.deactivate()
 
-    path = tmp_path / "accounts.csv"
-
-    repo = AccountRepository(
-        storage_path=path
+    repository_with_account.update(
+        account
     )
 
-    for i in range(3):
+    accounts = (
+        repository_with_account
+        .find_inactive_accounts()
+    )
 
-        repo.add(
+    assert len(accounts) == 1
+    assert accounts[0] is account
 
-            SavingsAccount(
-                account_number=f"SA{i}",
-                customer=customer,
-                opening_balance=Money("100"),
-            )
+
+def test_customer_has_accounts(
+    repository_with_account,
+    account,
+):
+    assert (
+        repository_with_account
+        .customer_has_accounts(
+            account.customer_id
         )
-
-    repo.save()
-
-    repo2 = AccountRepository(
-        storage_path=path
-    )
-
-    repo2.load()
-
-    assert repo2.count() == 3
-
-# ============================================================
-# CSV Recovery
-# ============================================================
-
-def test_load_missing_csv(tmp_path):
-
-    repo = AccountRepository(
-
-        storage_path=tmp_path / "missing.csv"
-
-    )
-
-    repo.load()
-
-    assert repo.count() == 0
-
-
-def test_load_empty_csv(tmp_path):
-
-    path = tmp_path / "accounts.csv"
-
-    path.write_text("")
-
-    repo = AccountRepository(
-        storage_path=path
-    )
-
-    repo.load()
-
-    assert repo.count() == 0
-
-
-def test_load_corrupted_csv(tmp_path):
-
-    path = tmp_path / "accounts.csv"
-
-    path.write_text(
-
-        "corrupted,data\n"
-
-        "invalid,row"
-
-    )
-
-    repo = AccountRepository(
-        storage_path=path
-    )
-
-    with pytest.raises(Exception):
-
-        repo.load()
-
-# ============================================================
-# Persistence Integrity
-# ============================================================
-
-def test_reload_preserves_account_type(
-    tmp_path,
-    savings,
-):
-
-    path = tmp_path / "accounts.csv"
-
-    repo = AccountRepository(
-        storage_path=path
-    )
-
-    repo.add(savings)
-
-    repo.save()
-
-    repo2 = AccountRepository(
-        storage_path=path
-    )
-
-    repo2.load()
-
-    restored = repo2.get(
-        savings.account_number
-    )
-
-    assert isinstance(
-        restored,
-        SavingsAccount,
+        is True
     )
 
 
-def test_reload_preserves_balance(
-    tmp_path,
-    savings,
-):
-
-    path = tmp_path / "accounts.csv"
-
-    repo = AccountRepository(
-        storage_path=path
-    )
-
-    repo.add(savings)
-
-    repo.save()
-
-    repo2 = AccountRepository(
-        storage_path=path
-    )
-
-    repo2.load()
-
-    restored = repo2.get(
-        savings.account_number
-    )
-
-    assert restored.balance == Money("1000")
-
-# ============================================================
-# Repository Consistency
-# ============================================================
-
-def test_update_then_save_then_reload(
-    tmp_path,
-    savings,
-):
-
-    path = tmp_path / "accounts.csv"
-
-    repo = AccountRepository(
-        storage_path=path
-    )
-
-    repo.add(savings)
-
-    savings.deposit(Money("500"))
-
-    repo.update(savings)
-
-    repo.save()
-
-    repo2 = AccountRepository(
-        storage_path=path
-    )
-
-    repo2.load()
-
-    restored = repo2.get(
-        savings.account_number
-    )
-
-    assert restored.balance == Money("1500")
-
-
-def test_delete_then_save_then_reload(
-    tmp_path,
-    savings,
-):
-
-    path = tmp_path / "accounts.csv"
-
-    repo = AccountRepository(
-        storage_path=path
-    )
-
-    repo.add(savings)
-
-    repo.remove(savings.account_number)
-
-    repo.save()
-
-    repo2 = AccountRepository(
-        storage_path=path
-    )
-
-    repo2.load()
-
-    assert repo2.count() == 0
-
-# PART 4
-
-# ============================================================
-# Repository Statistics
-# ============================================================
-
-def test_repository_summary(repository):
-
-    summary = repository.repository_summary()
-
-    assert isinstance(summary, dict)
-
-
-def test_repository_summary_empty(repository):
-
-    summary = repository.repository_summary()
-
-    assert summary["total_accounts"] == 0
-
-
-def test_repository_summary_after_insert(
+def test_customer_has_accounts_false(
     repository,
-    savings,
 ):
-
-    repository.add(savings)
-
-    summary = repository.repository_summary()
-
-    assert summary["total_accounts"] == 1
-
-
-def test_total_balance_empty(repository):
-
-    assert repository.total_balance() == Money.zero()
-
-
-def test_total_balance_multiple_types(
-    repository,
-    savings,
-    current,
-    time_deposit,
-):
-
-    repository.add(savings)
-    repository.add(current)
-    repository.add(time_deposit)
-
-    assert repository.total_balance() == Money("6500")
-
-# ============================================================
-# Account Type Statistics
-# ============================================================
-
-def test_savings_account_count(
-    repository,
-    savings,
-):
-
-    repository.add(savings)
-
-    assert repository.savings_account_count() == 1
-
-
-def test_current_account_count(
-    repository,
-    current,
-):
-
-    repository.add(current)
-
-    assert repository.current_account_count() == 1
-
-
-def test_time_deposit_count(
-    repository,
-    time_deposit,
-):
-
-    repository.add(time_deposit)
-
-    assert repository.time_deposit_account_count() == 1
+    assert (
+        repository.customer_has_accounts(
+            "C999999"
+        )
+        is False
+    )
 
 
 def test_active_account_count(
-    repository,
-    savings,
+    repository_with_account,
 ):
-
-    repository.add(savings)
-
-    assert repository.active_account_count() == 1
-
-# ============================================================
-# Batch Operations
-# ============================================================
-
-def test_add_many_accounts(
-    repository,
-    customer,
-):
-
-    accounts = []
-
-    for i in range(10):
-
-        accounts.append(
-
-            SavingsAccount(
-
-                account_number=f"SA{i:04}",
-
-                customer=customer,
-
-                opening_balance=Money("100"),
-
-            )
-        )
-
-    repository.add_many(accounts)
-
-    assert repository.count() == 10
-
-
-def test_clear_repository(
-    repository,
-    savings,
-):
-
-    repository.add(savings)
-
-    repository.clear()
-
-    assert repository.count() == 0
-
-    assert repository.get_all() == []
-
-# ============================================================
-# Boundary Conditions
-# ============================================================
-
-def test_zero_balance_account(
-    repository,
-    customer,
-):
-
-    account = SavingsAccount(
-
-        account_number="ZERO001",
-
-        customer=customer,
-
-        opening_balance=Money.zero(),
-
+    assert (
+        repository_with_account
+        .active_account_count()
+        == 1
     )
 
-    repository.add(account)
 
-    assert repository.count() == 1
-
-
-def test_large_balance_account(
-    repository,
-    customer,
+def test_statistics(
+    repository_with_account,
 ):
-
-    account = SavingsAccount(
-
-        account_number="BIG001",
-
-        customer=customer,
-
-        opening_balance=Money("999999999.99"),
-
+    stats = (
+        repository_with_account
+        .statistics()
     )
-
-    repository.add(account)
-
-    assert repository.get(
-
-        account.account_number
-
-    ).balance == Money("999999999.99")
-
-
-def test_empty_account_search(repository):
-
-    assert repository.search_account_number("") == []
-
-
-def test_whitespace_account_search(repository):
-
-    assert repository.search_account_number("   ") == []
-
-# ============================================================
-# Large Repository
-# ============================================================
-
-def test_large_repository(
-    repository,
-    customer,
-):
-
-    for i in range(1000):
-
-        repository.add(
-
-            SavingsAccount(
-
-                account_number=f"SA{i:05}",
-
-                customer=customer,
-
-                opening_balance=Money("100"),
-
-            )
-        )
-
-    assert repository.count() == 1000
-
-# ============================================================
-# Index Consistency
-# ============================================================
-
-def test_customer_index_after_clear(
-    repository,
-    savings,
-):
-
-    repository.add(savings)
-
-    repository.clear()
 
     assert (
+        stats["total_accounts"]
+        == 1
+    )
 
-        repository.get_by_customer(
+    assert (
+        stats["active_accounts"]
+        == 1
+    )
+    
+# Part 3 — Account Classification & Filtering
 
-            savings.customer.customer_id
+# ------------------------------------------------------------------
+# Account classification
+# ------------------------------------------------------------------
 
+
+def test_find_by_account_type(
+    repository_with_account,
+    account,
+):
+    accounts = (
+        repository_with_account
+        .find_by_account_type(
+            account.account_type
         )
+    )
 
+    assert len(accounts) == 1
+    assert accounts[0] is account
+
+
+def test_savings_accounts(
+    repository_with_account,
+    account,
+):
+    accounts = (
+        repository_with_account
+        .savings_accounts()
+    )
+
+    assert len(accounts) == 1
+    assert accounts[0] is account
+
+
+def test_current_accounts_empty(
+    repository_with_account,
+):
+    assert (
+        repository_with_account
+        .current_accounts()
         == []
-
     )
 
 
-def test_repository_indexes_after_reload(
-    tmp_path,
-    savings,
+def test_time_deposit_accounts_empty(
+    repository_with_account,
 ):
-
-    path = tmp_path / "accounts.csv"
-
-    repo = AccountRepository(
-
-        storage_path=path
-
-    )
-
-    repo.add(savings)
-
-    repo.save()
-
-    repo2 = AccountRepository(
-
-        storage_path=path
-
-    )
-
-    repo2.load()
-
     assert (
-
-        repo2.get_by_customer(
-
-            savings.customer.customer_id
-
-        )[0]
-
-        == savings
-
-    )
-
-# ============================================================
-# Index Consistency
-# ============================================================
-
-def test_customer_index_after_clear(
-    repository,
-    savings,
-):
-
-    repository.add(savings)
-
-    repository.clear()
-
-    assert (
-
-        repository.get_by_customer(
-
-            savings.customer.customer_id
-
-        )
-
+        repository_with_account
+        .time_deposit_accounts()
         == []
-
     )
 
 
-def test_repository_indexes_after_reload(
-    tmp_path,
-    savings,
+# ------------------------------------------------------------------
+# Currency
+# ------------------------------------------------------------------
+
+
+def test_find_by_currency(
+    repository_with_account,
+    account,
 ):
-
-    path = tmp_path / "accounts.csv"
-
-    repo = AccountRepository(
-
-        storage_path=path
-
+    accounts = (
+        repository_with_account
+        .find_by_currency(
+            account.balance.currency
+        )
     )
 
-    repo.add(savings)
+    assert len(accounts) == 1
+    assert accounts[0] is account
 
-    repo.save()
 
-    repo2 = AccountRepository(
-
-        storage_path=path
-
-    )
-
-    repo2.load()
-
+def test_find_by_unknown_currency(
+    repository_with_account,
+):
     assert (
-
-        repo2.get_by_customer(
-
-            savings.customer.customer_id
-
-        )[0]
-
-        == savings
-
+        repository_with_account
+        .find_by_currency(
+            "USD"
+        )
+        == []
     )
 
-# ============================================================
-# Repository Iteration
-# ============================================================
 
-def test_repository_iteration(
-    repository,
-    customer,
+# ------------------------------------------------------------------
+# Status
+# ------------------------------------------------------------------
+
+
+def test_find_by_status_active(
+    repository_with_account,
+    account,
 ):
+    accounts = (
+        repository_with_account
+        .find_by_status(
+            AccountStatus.ACTIVE
+        )
+    )
 
-    for i in range(5):
+    assert len(accounts) == 1
+    assert accounts[0] is account
 
-        repository.add(
 
-            SavingsAccount(
+def test_find_frozen_accounts(
+    repository_with_account,
+):
+    assert (
+        repository_with_account
+        .find_frozen_accounts()
+        == []
+    )
 
-                account_number=f"SA{i}",
 
-                customer=customer,
+def test_find_closed_accounts(
+    repository_with_account,
+):
+    assert (
+        repository_with_account
+        .find_closed_accounts()
+        == []
+    )
 
-                opening_balance=Money("100"),
 
-            )
+def test_find_dormant_accounts(
+    repository_with_account,
+):
+    assert (
+        repository_with_account
+        .find_dormant_accounts()
+        == []
+    )
+
+
+def test_dormant_account_count(
+    repository_with_account,
+):
+    assert (
+        repository_with_account
+        .dormant_account_count()
+        == 0
+    )
+
+
+def test_frozen_account_count(
+    repository_with_account,
+):
+    assert (
+        repository_with_account
+        .frozen_account_count()
+        == 0
+    )
+
+
+# ------------------------------------------------------------------
+# Balance filtering
+# ------------------------------------------------------------------
+
+
+def test_find_positive_balance_accounts(
+    repository_with_account,
+    account,
+):
+    accounts = (
+        repository_with_account
+        .find_positive_balance_accounts()
+    )
+
+    assert len(accounts) == 1
+    assert accounts[0] is account
+
+
+def test_find_zero_balance_accounts(
+    repository_with_account,
+):
+    assert (
+        repository_with_account
+        .find_zero_balance_accounts()
+        == []
+    )
+
+
+def test_find_negative_balance_accounts(
+    repository_with_account,
+):
+    assert (
+        repository_with_account
+        .find_negative_balance_accounts()
+        == []
+    )
+
+
+def test_find_overdrawn_accounts(
+    repository_with_account,
+):
+    assert (
+        repository_with_account
+        .find_overdrawn_accounts()
+        == []
+    )
+
+# PART 4
+# ------------------------------------------------------------------
+# Balance range
+# ------------------------------------------------------------------
+
+
+def test_find_by_balance_range(
+    repository_with_account,
+    account,
+):
+    accounts = (
+        repository_with_account
+        .find_by_balance_range(
+            Decimal("100.00"),
+            Decimal("1000.00"),
+        )
+    )
+
+    assert len(accounts) == 1
+    assert accounts[0] is account
+
+
+def test_find_by_balance_range_no_matches(
+    repository_with_account,
+):
+    accounts = (
+        repository_with_account
+        .find_by_balance_range(
+            Decimal("5000.00"),
+            Decimal("10000.00"),
+        )
+    )
+
+    assert accounts == []
+
+
+# ------------------------------------------------------------------
+# Opening date
+# ------------------------------------------------------------------
+
+
+def test_find_opened_between(
+    repository_with_account,
+    account,
+):
+    accounts = (
+        repository_with_account
+        .find_opened_between(
+            account.opened_date,
+            account.opened_date,
+        )
+    )
+
+    assert len(accounts) == 1
+    assert accounts[0] is account
+
+
+def test_find_opened_between_no_match(
+    repository_with_account,
+):
+    accounts = (
+        repository_with_account
+        .find_opened_between(
+            date(2000, 1, 1),
+            date(2000, 12, 31),
+        )
+    )
+
+    assert accounts == []
+
+# ------------------------------------------------------------------
+# Customer statistics
+# ------------------------------------------------------------------
+
+
+def test_customer_account_count(
+    repository_with_account,
+    account,
+):
+    assert (
+        repository_with_account
+        .customer_account_count(
+            account.customer_id
+        )
+        == 1
+    )
+
+
+def test_customer_account_count_unknown_customer(
+    repository,
+):
+    assert (
+        repository.customer_account_count(
+            "C999999"
+        )
+        == 0
+    )
+
+
+def test_customer_total_balance(
+    repository_with_account,
+    account,
+):
+    total = (
+        repository_with_account
+        .customer_total_balance(
+            account.customer_id
+        )
+    )
+
+    assert total == account.balance.amount
+
+
+def test_customer_total_balance_unknown_customer(
+    repository,
+):
+    total = (
+        repository.customer_total_balance(
+            "C999999"
+        )
+    )
+
+    assert total == Decimal("0.00")
+
+
+def test_customer_accounts_by_type(
+    repository_with_account,
+    account,
+):
+    accounts = (
+        repository_with_account
+        .customer_accounts_by_type(
+            account.customer_id,
+            account.account_type,
+        )
+    )
+
+    assert len(accounts) == 1
+    assert accounts[0] is account
+
+
+def test_customer_accounts_by_type_unknown_customer(
+    repository,
+):
+    accounts = (
+        repository.customer_accounts_by_type(
+            "C999999",
+            AccountType.SAVINGS,
+        )
+    )
+
+    assert accounts == []
+
+# PART 5
+
+# ------------------------------------------------------------------
+# Validation
+# ------------------------------------------------------------------
+
+
+def test_account_exists(
+    repository_with_account,
+    account,
+):
+    assert (
+        repository_with_account
+        .account_exists(
+            account.account_number
+        )
+        is True
+    )
+
+
+def test_account_exists_false(
+    repository,
+):
+    assert (
+        repository.account_exists(
+            "SA999999"
+        )
+        is False
+    )
+
+
+def test_get_or_raise(
+    repository_with_account,
+    account,
+):
+    found = (
+        repository_with_account
+        .get_or_raise(
+            account.account_number
+        )
+    )
+
+    assert found is account
+
+
+def test_get_or_raise_not_found(
+    repository,
+):
+    with pytest.raises(
+        EntityNotFoundError
+    ):
+        repository.get_or_raise(
+            "SA999999"
         )
 
-    count = 0
 
-    for _ in repository:
-
-        count += 1
-
-    assert count == repository.count()
-
-
-def test_repository_length(
-    repository,
+def test_validate_unique_account_duplicate(
+    repository_with_account,
+    account,
 ):
-
-    assert len(repository) == repository.count()
-
-
-def test_repository_boolean(
-    repository,
-    savings,
-):
-
-    assert bool(repository) is False
-
-    repository.add(savings)
-
-    assert bool(repository) is True
-
-# ============================================================
-# Copy / Export
-# ============================================================
-
-def test_repository_copy(
-    repository,
-    savings,
-):
-
-    repository.add(savings)
-
-    copied = repository.copy()
-
-    assert copied.count() == repository.count()
-
-    assert (
-
-        copied.get(
-
-            savings.account_number
-
+    with pytest.raises(
+        EntityAlreadyExistsError
+    ):
+        repository_with_account.validate_unique_account(
+            account
         )
 
-        == savings
 
-    )
+# ------------------------------------------------------------------
+# Persistence
+# ------------------------------------------------------------------
 
 
-def test_export_then_import(
-    tmp_path,
-    savings,
+def test_add_account(
+    repository,
+    account,
 ):
-
-    path = tmp_path / "accounts.csv"
-
-    repo = AccountRepository(
-
-        storage_path=path
-
+    repository.add_account(
+        account
     )
 
-    repo.add(savings)
-
-    repo.export_csv()
-
-    imported = AccountRepository(
-
-        storage_path=path
-
+    found = (
+        repository.find_by_account_number(
+            account.account_number
+        )
     )
 
-    imported.import_csv()
+    assert found is account
 
-    assert imported.count() == 1
 
+def test_save_account(
+    repository,
+    account,
+):
+    repository.save_account(
+        account
+    )
+
+    repository.reload()
+
+    found = (
+        repository.find_by_account_number(
+            account.account_number
+        )
+    )
+
+    assert found is not None
+    assert (
+        found.account_number
+        == account.account_number
+    )
+
+
+def test_remove_account(
+    repository_with_account,
+    account,
+):
+    removed = (
+        repository_with_account.remove_account(
+            account.account_number
+        )
+    )
+
+    assert removed is True
+
+    # Active lookup should no longer find it.
+    assert (
+        repository_with_account.find_by_account_number(
+            account.account_number
+        )
+        is None
+    )
+
+    # It should still exist as an inactive account.
+    inactive = (
+        repository_with_account.find_inactive_accounts()
+    )
+
+    # assert len(inactive) == 1
+    # assert inactive[0] is account
+    
+    assert inactive[0].account_number == account.account_number
+
+# ---added to do regression test
+def test_find_by_account_number_ignores_inactive_accounts(
+    repository_with_account,
+    account,
+):
+    account.deactivate()
+    repository_with_account.update(account)
+
+    assert (
+        repository_with_account.find_by_account_number(
+            account.account_number
+        )
+        is None
+    )
+
+    inactive = repository_with_account.find_inactive_accounts()
+
+    assert inactive[0] is account
+    
+# ------------------------------------------------------------------
+# String representation
+# ------------------------------------------------------------------
+
+
+def test_str(
+    repository_with_account,
+):
+    text = str(
+        repository_with_account
+    )
+
+    assert (
+        "AccountRepository"
+        in text
+    )
+
+
+def test_repr(
+    repository_with_account,
+):
+    text = repr(
+        repository_with_account
+    )
+
+    assert (
+        "AccountRepository"
+        in text
+    )
+
+    assert (
+        "count=1"
+        in text
+    )

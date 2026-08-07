@@ -250,3 +250,56 @@ class DirectoryGenerator:
             parents=True,
             exist_ok=True
         )
+
+# ------------------------------------------------------------------
+# Backward Compatibility
+# ------------------------------------------------------------------
+
+class Generator:
+    """
+    Compatibility wrapper for legacy code.
+    """
+
+    @staticmethod
+    def customer_id():
+        return IDGenerator.customer_id()
+
+    @staticmethod
+    def employee_id():
+        return IDGenerator.employee_id()
+
+    @staticmethod
+    def account_number():
+        return IDGenerator.account_number()
+
+    @staticmethod
+    def transaction_number():
+        return IDGenerator.transaction_number()
+
+    @staticmethod
+    def bank_id():
+        return IDGenerator.bank_id()
+
+    @staticmethod
+    def transfer_reference():
+        return ReferenceGenerator.transfer_reference()
+
+    @staticmethod
+    def receipt_number():
+        return ReferenceGenerator.receipt_number()
+
+    @staticmethod
+    def audit_reference():
+        return ReferenceGenerator.audit_reference()
+
+    @staticmethod
+    def temporary_password(length=12):
+        return SecurityGenerator.temporary_password(length)
+
+    @staticmethod
+    def api_token(length=32):
+        return SecurityGenerator.api_token(length)
+
+    @staticmethod
+    def session_token():
+        return SecurityGenerator.session_token()

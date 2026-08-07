@@ -59,6 +59,21 @@ class AccountType(str, Enum):
 
 
 # ==================================================================
+# InterestFrequency -- added bacuse it is used in import savings_account
+# ==================================================================
+
+class InterestFrequency(str, Enum):
+    """Supported bank account types."""
+
+    DAILY = 365
+    WEEKLY = 52
+    MONTHLY = 12
+    QUARTERLY = 4
+    SEMI_ANNUALLY = 2
+    ANNUALLY = 1
+
+
+# ==================================================================
 # Account Status
 # ==================================================================
 

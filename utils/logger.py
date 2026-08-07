@@ -145,3 +145,26 @@ application_logger = LoggerFactory.application()
 audit_logger = LoggerFactory.audit()
 
 error_logger = LoggerFactory.error()
+
+# ------------------------------------------------------------------
+# Backward Compatibility
+# ------------------------------------------------------------------
+
+def get_logger(name: str = "application") -> logging.Logger:
+    """
+    Backward-compatible logger accessor.
+
+    Supports legacy imports such as:
+        from utils.logger import get_logger
+    """
+
+    LoggerFactory.initialize()
+
+    loggers = {
+        "application": application_logger,
+        "audit": audit_logger,
+        "error": error_logger,
+    }
+
+    return loggers.get(name, logging.getLogger(name))
+

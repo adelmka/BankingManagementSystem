@@ -69,6 +69,65 @@ class Validator:
         return True
 
     # -------------------------------------------------------------
+    # Backward Compatibility
+    # -------------------------------------------------------------
+
+    @staticmethod
+    def required(value: object, field_name: str) -> bool:
+        Validator.not_none(value, field_name)
+        if isinstance(value, str):
+            Validator.not_empty(value, field_name)
+        return True
+
+    @staticmethod
+    def max_length(value: str, maximum: int, field_name: str) -> bool:
+        """
+        Validate that a string does not exceed the maximum length.
+
+        Empty strings and None are allowed. Use Validator.required()
+        separately when a field is mandatory.
+        """
+
+        if value is None or value == "":
+            return True
+
+        if len(value) > maximum:
+            raise ValidationError(
+                f"{field_name} cannot exceed {maximum} characters."
+            )
+
+        return True
+
+    @staticmethod
+    def min_length(value: str, minimum: int, field_name: str) -> bool:
+        Validator.required(value, field_name)
+
+        if len(value) < minimum:
+            raise ValidationError(
+                f"{field_name} must contain at least {minimum} characters."
+            )
+
+        return True
+
+    @staticmethod
+    def length_between(
+        value: str,
+        minimum: int,
+        maximum: int,
+        field_name: str,
+    ) -> bool:
+
+        Validator.required(value, field_name)
+
+        if not (minimum <= len(value) <= maximum):
+            raise ValidationError(
+                f"{field_name} must contain between "
+                f"{minimum} and {maximum} characters."
+            )
+
+        return True
+    
+    # -------------------------------------------------------------
     # Name
     # -------------------------------------------------------------
 
@@ -253,11 +312,17 @@ class Validator:
     # -------------------------------------------------------------
 
     @staticmethod
-    def date_not_future(value: date) -> bool:
+    def date_not_future(
+        value: date,
+        field_name: str = "Date",
+    ) -> bool:
+        """
+        Validate that a date is not in the future.
+        """
 
         if value > date.today():
             raise ValidationError(
-                "Date cannot be in the future."
+                f"{field_name} cannot be in the future."
             )
 
         return True
@@ -311,3 +376,34 @@ class Validator:
             )
 
         return True
+
+  
+    # -------------------------------------------------------------
+    # postal_code -- added later
+    # -------------------------------------------------------------
+
+    @staticmethod
+    def postal_code(value: str, field_name: str = "Postal Code") -> bool:
+        """
+        Basic postal code validation for backward compatibility.
+        """
+
+        Validator.required(value, field_name)
+
+        if len(value.strip()) < 3:
+            raise ValidationError(
+                f"{field_name} is invalid."
+            )
+
+        return True
+
+    # -------------------------------------------------------------
+    # for backward compatibility
+    # -------------------------------------------------------------
+
+    @classmethod
+    def phone_number(cls, value: str) -> bool:
+        """
+        Backward-compatible wrapper.
+        """
+        return cls.phone(value)

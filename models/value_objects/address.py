@@ -74,11 +74,12 @@ class Address:
             "Address Line 1",
         )
 
-        Validator.max_length(
-            self.address_line_2,
-            100,
-            "Address Line 2",
-        )
+        if self.address_line_2:
+            Validator.max_length(
+                self.address_line_2,
+                100,
+                "Address Line 2",
+            )
 
         Validator.max_length(
             self.city,

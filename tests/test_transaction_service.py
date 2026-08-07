@@ -1,70 +1,110 @@
 """
-============================================================
-Transaction Service Tests
-Part 1
-------------------------------------------------------------
-Coverage
+===============================================================================
+Banking Management System (BMS)
 
-• Service construction
-• Dependency injection
-• Transaction creation
-• Deposit transaction recording
-• Withdrawal transaction recording
-• Transfer transaction recording
-• Transaction retrieval
-============================================================
+File        : test_transaction_service.py
+Description : Unit tests for TransactionService.
+
+These tests exercise the current TransactionService contract using mocked
+repositories.  They intentionally do not introduce architectural changes.
+===============================================================================
 """
+
+from datetime import date, datetime, time
+from decimal import Decimal
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
+from exceptions import PersistenceError
+from models.value_objects.money import Money
 from services.transaction_service import TransactionService
 
-from repositories.transaction_repository import TransactionRepository
-from repositories.account_repository import AccountRepository
-from repositories.customer_repository import CustomerRepository
 
-from models.customer import Customer
-from models.savings_account import SavingsAccount
-from models.transaction import Transaction
+ACCOUNT_NUMBER = "SA-100001"
+DESTINATION_ACCOUNT = "CA-200001"
+CUSTOMER_NUMBER = "C000001"
+TRANSACTION_NUMBER = "TX-000001"
 
-from models.value_objects.money import Money
-from models.value_objects.email import EmailAddress
-from models.value_objects.phone import PhoneNumber
-from models.value_objects.address import Address
 
-from exceptions.banking_exceptions import (
-    ValidationError,
-    DuplicateTransactionError,
-)
+def make_type(
+    value="Deposit",
+    *,
+    is_debit=False,
+    is_credit=True,
+):
+    return SimpleNamespace(
+        value=value,
+        is_debit=is_debit,
+        is_credit=is_credit,
+    )
 
-test_transaction_service.py
 
-# ============================================================
-# Fixtures
-# ============================================================
+def make_transaction(
+    number=TRANSACTION_NUMBER,
+    *,
+    account_number=ACCOUNT_NUMBER,
+    customer_number=CUSTOMER_NUMBER,
+    amount="100.00",
+    transaction_type=None,
+    transaction_date=None,
+    transaction_time=None,
+    description="Test transaction",
+):
+    return SimpleNamespace(
+        transaction_number=number,
+        account_number=account_number,
+        customer_number=customer_number,
+        amount=Money(
+            amount=Decimal(amount),
+            currency="SAR",
+        ),
+        transaction_type=(
+            transaction_type
+            or make_type()
+        ),
+        transaction_date=(
+            transaction_date
+            or date(2026, 8, 7)
+        ),
+        transaction_time=(
+            transaction_time
+            or time(10, 0, 0)
+        ),
+        description=description,
+    )
 
-@pytest.fixture
-def customer_repository(tmp_path):
 
-    return CustomerRepository(
-        storage_path=tmp_path / "customers.csv"
+def make_account(
+    account_number=ACCOUNT_NUMBER,
+    *,
+    currency="SAR",
+):
+    return SimpleNamespace(
+        account_number=account_number,
+        currency=currency,
     )
 
 
 @pytest.fixture
-def account_repository(tmp_path):
+def transaction_repository():
+    repository = MagicMock()
+    repository.auto_save = True
+    transactions = []
 
-    return AccountRepository(
-        storage_path=tmp_path / "accounts.csv"
+    repository.__iter__.side_effect = (
+        lambda: iter(transactions)
     )
+    repository.__len__.side_effect = (
+        lambda: len(transactions)
+    )
+    return repository
 
 
 @pytest.fixture
-def transaction_repository(tmp_path):
-
-    return TransactionRepository(
-        storage_path=tmp_path / "transactions.csv"
-    )
+def account_repository():
+    return MagicMock()
 
 
 @pytest.fixture
@@ -72,1497 +112,894 @@ def service(
     transaction_repository,
     account_repository,
 ):
-
     return TransactionService(
         transaction_repository=transaction_repository,
         account_repository=account_repository,
     )
 
 
-@pytest.fixture
-def customer(customer_repository):
+# ---------------------------------------------------------------------------
+# Constructor
+# ---------------------------------------------------------------------------
 
-    customer = Customer(
-
-        customer_id="CUST000001",
-
-        first_name="John",
-
-        middle_name="",
-
-        last_name="Smith",
-
-        national_id="1234567890",
-
-        email=EmailAddress("john@test.com"),
-
-        phone=PhoneNumber("+966501234567"),
-
-        address=Address(
-
-            street="King Road",
-
-            city="Riyadh",
-
-            state="Riyadh",
-
-            postal_code="12345",
-
-            country="Saudi Arabia",
-
-        ),
-    )
-
-    customer_repository.add(customer)
-
-    return customer
-
-
-@pytest.fixture
-def account(
+def test_constructor_stores_repositories(
+    service,
+    transaction_repository,
     account_repository,
-    customer,
 ):
-
-    account = SavingsAccount(
-
-        account_number="SA100001",
-
-        customer_id=customer.customer_id,
-
-        balance=Money("5000"),
-
-    )
-
-    account_repository.add(account)
-
-    return account
-
-# ============================================================
-# Service Construction
-# ============================================================
-
-def test_service_created(service):
-
-    assert service is not None
+    assert service.repository is transaction_repository
+    assert service._account_repository is account_repository
 
 
-def test_transaction_repository_injected(
+def test_repository_property_returns_transaction_repository(
     service,
     transaction_repository,
 ):
-
-    assert (
-        service.transaction_repository
-        is transaction_repository
-    )
+    assert service.repository is transaction_repository
 
 
-def test_account_repository_injected(
+# ---------------------------------------------------------------------------
+# Recording
+# ---------------------------------------------------------------------------
+
+def test_record_transaction_returns_same_transaction(
     service,
-    account_repository,
+    transaction_repository,
 ):
+    transaction = make_transaction()
 
-    assert (
-        service.account_repository
-        is account_repository
+    result = service.record_transaction(
+        transaction
     )
 
+    assert result is transaction
+    transaction_repository.add_transaction.assert_called_once_with(
+        transaction
+    )
+    transaction_repository.flush.assert_called_once()
 
-def test_empty_repository(service):
 
-    assert service.transaction_count() == 0
-
-# ============================================================
-# Deposit Transactions
-# ============================================================
-
-def test_record_deposit(
+def test_record_transaction_propagates_repository_error(
     service,
-    account,
+    transaction_repository,
 ):
+    transaction = make_transaction()
+    error = RuntimeError("database failure")
 
-    transaction = service.record_deposit(
+    transaction_repository.add_transaction.side_effect = error
 
-        account.account_number,
+    with pytest.raises(RuntimeError, match="database failure"):
+        service.record_transaction(transaction)
 
-        Money("1000"),
-
-    )
-
-    assert isinstance(
-        transaction,
-        Transaction,
-    )
-
-    assert (
-        service.transaction_count() == 1
+    transaction_repository.add_transaction.assert_called_once_with(
+        transaction
     )
 
 
-def test_record_deposit_amount(
+
+# ---------------------------------------------------------------------------
+# Lookup and basic queries
+# ---------------------------------------------------------------------------
+
+def test_get_transaction_delegates_to_repository(
     service,
-    account,
+    transaction_repository,
 ):
+    transaction = make_transaction()
 
-    transaction = service.record_deposit(
-
-        account.account_number,
-
-        Money("250"),
-
+    transaction_repository.get_or_raise.return_value = (
+        transaction
     )
 
-    assert transaction.amount == Money("250")
+    result = service.get_transaction(
+        TRANSACTION_NUMBER
+    )
 
-# ============================================================
-# Withdrawal Transactions
-# ============================================================
+    assert result is transaction
+    transaction_repository.get_or_raise.assert_called_once_with(
+        TRANSACTION_NUMBER
+    )
 
-def test_record_withdrawal(
+
+def test_transaction_exists_delegates_to_repository(
     service,
-    account,
+    transaction_repository,
 ):
-
-    transaction = service.record_withdrawal(
-
-        account.account_number,
-
-        Money("300"),
-
-    )
-
-    assert isinstance(
-        transaction,
-        Transaction,
-    )
-
-
-def test_record_withdrawal_amount(
-    service,
-    account,
-):
-
-    transaction = service.record_withdrawal(
-
-        account.account_number,
-
-        Money("500"),
-
-    )
-
-    assert transaction.amount == Money("500")
-
-# ============================================================
-# Transfer Transactions
-# ============================================================
-
-def test_record_transfer(
-    service,
-    account_repository,
-    account,
-):
-
-    destination = SavingsAccount(
-
-        account_number="SA200001",
-
-        customer_id=account.customer_id,
-
-        balance=Money("1000"),
-
-    )
-
-    account_repository.add(destination)
-
-    transaction = service.record_transfer(
-
-        account.account_number,
-
-        destination.account_number,
-
-        Money("750"),
-
-    )
-
-    assert isinstance(
-        transaction,
-        Transaction,
-    )
-
-
-def test_transfer_transaction_amount(
-    service,
-    account_repository,
-    account,
-):
-
-    destination = SavingsAccount(
-
-        account_number="SA200002",
-
-        customer_id=account.customer_id,
-
-        balance=Money("1000"),
-
-    )
-
-    account_repository.add(destination)
-
-    transaction = service.record_transfer(
-
-        account.account_number,
-
-        destination.account_number,
-
-        Money("600"),
-
-    )
-
-    assert transaction.amount == Money("600")
-
-# ============================================================
-# Retrieval
-# ============================================================
-
-def test_get_transaction(
-    service,
-    account,
-):
-
-    transaction = service.record_deposit(
-
-        account.account_number,
-
-        Money("100"),
-
-    )
-
-    found = service.get_transaction(
-        transaction.transaction_id
-    )
-
-    assert found == transaction
-
-
-def test_transaction_exists(
-    service,
-    account,
-):
-
-    transaction = service.record_deposit(
-
-        account.account_number,
-
-        Money("100"),
-
-    )
+    transaction_repository.transaction_exists.return_value = True
 
     assert service.transaction_exists(
-        transaction.transaction_id
+        TRANSACTION_NUMBER
+    ) is True
+
+    transaction_repository.transaction_exists.assert_called_once_with(
+        TRANSACTION_NUMBER
     )
 
-# PART 2
 
-# ============================================================
-# Validation
-# ============================================================
-
-def test_record_zero_deposit(
+def test_all_transactions_returns_repository_contents(
     service,
-    account,
+    transaction_repository,
 ):
+    transactions = [
+        make_transaction("TX-000001"),
+        make_transaction("TX-000002"),
+    ]
+    transaction_repository.__iter__.side_effect = (
+        lambda: iter(transactions)
+    )
 
-    with pytest.raises(
-        ValidationError
-    ):
+    assert service.all_transactions() == transactions
 
-        service.record_deposit(
 
-            account.account_number,
+def test_account_delegates_to_account_repository(
+    service,
+    account_repository,
+):
+    account = make_account()
+    account_repository.get_or_raise.return_value = account
 
-            Money.zero(),
+    result = service.account(
+        ACCOUNT_NUMBER
+    )
 
+    assert result is account
+    account_repository.get_or_raise.assert_called_once_with(
+        ACCOUNT_NUMBER
+    )
+
+
+# ---------------------------------------------------------------------------
+# Search operations
+# ---------------------------------------------------------------------------
+
+def test_account_transactions_validates_account_then_queries_repository(
+    service,
+    transaction_repository,
+    account_repository,
+):
+    account_repository.get_or_raise.return_value = (
+        make_account()
+    )
+    transactions = [make_transaction()]
+    transaction_repository.find_by_account.return_value = (
+        transactions
+    )
+
+    result = service.account_transactions(
+        ACCOUNT_NUMBER
+    )
+
+    assert result == transactions
+    account_repository.get_or_raise.assert_called_once_with(
+        ACCOUNT_NUMBER
+    )
+    transaction_repository.find_by_account.assert_called_once_with(
+        ACCOUNT_NUMBER
+    )
+
+
+def test_customer_transactions_delegates_to_repository(
+    service,
+    transaction_repository,
+):
+    transactions = [make_transaction()]
+    transaction_repository.find_by_customer.return_value = (
+        transactions
+    )
+
+    result = service.customer_transactions(
+        CUSTOMER_NUMBER
+    )
+
+    assert result == transactions
+    transaction_repository.find_by_customer.assert_called_once_with(
+        CUSTOMER_NUMBER
+    )
+
+
+def test_transactions_by_type_delegates_to_repository(
+    service,
+    transaction_repository,
+):
+    transaction_type = make_type("Deposit")
+    expected = [make_transaction(transaction_type=transaction_type)]
+
+    transaction_repository.find_by_type.return_value = expected
+
+    assert service.transactions_by_type(
+        transaction_type
+    ) == expected
+
+    transaction_repository.find_by_type.assert_called_once_with(
+        transaction_type
+    )
+
+
+def test_transactions_between_delegates_to_repository(
+    service,
+    transaction_repository,
+):
+    start = date(2026, 8, 1)
+    end = date(2026, 8, 7)
+    expected = [make_transaction()]
+
+    transaction_repository.find_between_dates.return_value = expected
+
+    assert service.transactions_between(
+        start,
+        end,
+    ) == expected
+
+    transaction_repository.find_between_dates.assert_called_once_with(
+        start,
+        end,
+    )
+
+
+def test_recent_transactions_sorts_newest_first(
+    service,
+    transaction_repository,
+):
+    older = make_transaction(
+        "TX-000001",
+        transaction_date=date(2026, 8, 6),
+        transaction_time=time(10, 0),
+    )
+    newer = make_transaction(
+        "TX-000002",
+        transaction_date=date(2026, 8, 7),
+        transaction_time=time(9, 0),
+    )
+
+    transaction_repository.__iter__.side_effect = (
+        lambda: iter([older, newer])
+    )
+
+    result = service.recent_transactions()
+
+    assert result == [newer, older]
+
+
+def test_recent_transactions_respects_limit(
+    service,
+    transaction_repository,
+):
+    transactions = [
+        make_transaction(
+            f"TX-{index:06d}",
+            transaction_date=date(2026, 8, 7),
+            transaction_time=time(index, 0),
         )
-
-
-def test_record_negative_deposit(
-    service,
-    account,
-):
-
-    with pytest.raises(
-        ValidationError
-    ):
-
-        service.record_deposit(
-
-            account.account_number,
-
-            Money("-100"),
-
-        )
-
-
-def test_record_zero_withdrawal(
-    service,
-    account,
-):
-
-    with pytest.raises(
-        ValidationError
-    ):
-
-        service.record_withdrawal(
-
-            account.account_number,
-
-            Money.zero(),
-
-        )
-
-
-def test_record_negative_withdrawal(
-    service,
-    account,
-):
-
-    with pytest.raises(
-        ValidationError
-    ):
-
-        service.record_withdrawal(
-
-            account.account_number,
-
-            Money("-25"),
-
-        )
-
-
-def test_unknown_account_deposit(
-    service,
-):
-
-    with pytest.raises(KeyError):
-
-        service.record_deposit(
-
-            "UNKNOWN",
-
-            Money("100"),
-
-        )
-
-
-def test_unknown_account_withdrawal(
-    service,
-):
-
-    with pytest.raises(KeyError):
-
-        service.record_withdrawal(
-
-            "UNKNOWN",
-
-            Money("100"),
-
-        )
-
-# ============================================================
-# Duplicate Transactions
-# ============================================================
-
-def test_duplicate_transaction_not_allowed(
-    service,
-    account,
-):
-
-    transaction = service.record_deposit(
-
-        account.account_number,
-
-        Money("500"),
-
-    )
-
-    with pytest.raises(
-        DuplicateTransactionError
-    ):
-
-        service.transaction_repository.add(
-            transaction
-        )
-
-# ============================================================
-# Retrieval
-# ============================================================
-
-def test_unknown_transaction_returns_none(
-    service,
-):
-
-    assert (
-        service.get_transaction(
-            "UNKNOWN"
-        )
-        is None
-    )
-
-
-def test_transaction_not_exists(
-    service,
-):
-
-    assert (
-        service.transaction_exists(
-            "UNKNOWN"
-        )
-        is False
-    )
-
-# ============================================================
-# Search by Account
-# ============================================================
-
-def test_get_transactions_for_account(
-    service,
-    account,
-):
-
-    service.record_deposit(
-
-        account.account_number,
-
-        Money("100"),
-
-    )
-
-    service.record_withdrawal(
-
-        account.account_number,
-
-        Money("50"),
-
-    )
-
-    transactions = service.get_transactions_by_account(
-
-        account.account_number
-
-    )
-
-    assert len(transactions) == 2
-
-
-def test_empty_transaction_history(
-    service,
-    account,
-):
-
-    history = service.get_transactions_by_account(
-
-        account.account_number
-
-    )
-
-    assert history == []
-
-# ============================================================
-# Filter by Transaction Type
-# ============================================================
-
-def test_filter_deposits(
-    service,
-    account,
-):
-
-    service.record_deposit(
-
-        account.account_number,
-
-        Money("100"),
-
-    )
-
-    service.record_withdrawal(
-
-        account.account_number,
-
-        Money("50"),
-
-    )
-
-    deposits = service.get_transactions_by_type(
-        "DEPOSIT"
-    )
-
-    assert len(deposits) == 1
-
-
-def test_filter_withdrawals(
-    service,
-    account,
-):
-
-    service.record_withdrawal(
-
-        account.account_number,
-
-        Money("25"),
-
-    )
-
-    withdrawals = service.get_transactions_by_type(
-        "WITHDRAWAL"
-    )
-
-    assert len(withdrawals) == 1
-
-# ============================================================
-# Date Filtering
-# ============================================================
-
-def test_filter_today_transactions(
-    service,
-    account,
-):
-
-    service.record_deposit(
-
-        account.account_number,
-
-        Money("100"),
-
-    )
-
-    today = date.today()
-
-    results = service.get_transactions_by_date(
-        today
-    )
-
-    assert len(results) >= 1
-
-
-def test_empty_date_filter(
-    service,
-):
-
-    results = service.get_transactions_by_date(
-        date(1999, 1, 1)
-    )
-
-    assert results == []
-
-# ============================================================
-# Repository Synchronization
-# ============================================================
-
-def test_repository_count_matches_service(
-    service,
-    account,
-):
-
-    service.record_deposit(
-
-        account.account_number,
-
-        Money("100"),
-
-    )
-
-    service.record_withdrawal(
-
-        account.account_number,
-
-        Money("50"),
-
-    )
-
-    assert (
-
-        service.transaction_repository.count()
-
-        ==
-
-        service.transaction_count()
-
-    )
-
-
-def test_repository_contains_transaction(
-    service,
-    account,
-):
-
-    transaction = service.record_deposit(
-
-        account.account_number,
-
-        Money("250"),
-
-    )
-
-    stored = service.transaction_repository.get(
-
-        transaction.transaction_id
-
-    )
-
-    assert stored == transaction
-
-# PART 3
-
-# ============================================================
-# Repository Synchronization
-# ============================================================
-
-def test_repository_count_matches_service(
-    service,
-    account,
-):
-
-    service.record_deposit(
-
-        account.account_number,
-
-        Money("100"),
-
-    )
-
-    service.record_withdrawal(
-
-        account.account_number,
-
-        Money("50"),
-
-    )
-
-    assert (
-
-        service.transaction_repository.count()
-
-        ==
-
-        service.transaction_count()
-
-    )
-
-
-def test_repository_contains_transaction(
-    service,
-    account,
-):
-
-    transaction = service.record_deposit(
-
-        account.account_number,
-
-        Money("250"),
-
-    )
-
-    stored = service.transaction_repository.get(
-
-        transaction.transaction_id
-
-    )
-
-    assert stored == transaction
-
-# ============================================================
-# Chronological Ordering
-# ============================================================
-
-def test_transactions_are_chronological(
-    service,
-    account,
-):
-
-    service.record_deposit(
-
-        account.account_number,
-
-        Money("100"),
-
-    )
-
-    service.record_withdrawal(
-
-        account.account_number,
-
-        Money("50"),
-
-    )
-
-    history = service.get_transactions_by_account(
-
-        account.account_number
-
-    )
-
-    timestamps = [
-
-        tx.transaction_date
-
-        for tx in history
-
+        for index in range(1, 6)
     ]
 
-    assert timestamps == sorted(timestamps)
+    transaction_repository.__iter__.side_effect = (
+        lambda: iter(transactions)
+    )
+
+    result = service.recent_transactions(
+        limit=2
+    )
+
+    assert len(result) == 2
+    assert result[0] is transactions[-1]
+    assert result[1] is transactions[-2]
 
 
-def test_latest_transaction_last(
+def test_transaction_count_uses_repository_length(
     service,
-    account,
+    transaction_repository,
 ):
+    transaction_repository.__len__.side_effect = lambda: 3
 
-    service.record_deposit(
+    assert service.transaction_count() == 3
 
-        account.account_number,
 
-        Money("10"),
-
-    )
-
-    service.record_deposit(
-
-        account.account_number,
-
-        Money("20"),
-
-    )
-
-    history = service.get_transactions_by_account(
-
-        account.account_number
-
-    )
-
-    assert (
-
-        history[-1].amount
-
-        == Money("20")
-
-    )
-
-# ============================================================
-# Running Balance
-# ============================================================
-
-def test_running_balance_sequence(
+def test_has_transactions_is_false_when_empty(
     service,
-    account,
+    transaction_repository,
 ):
+    transaction_repository.__len__.side_effect = lambda: 0
 
-    service.record_deposit(
-
-        account.account_number,
-
-        Money("100"),
-
-    )
-
-    service.record_withdrawal(
-
-        account.account_number,
-
-        Money("50"),
-
-    )
-
-    service.record_deposit(
-
-        account.account_number,
-
-        Money("25"),
-
-    )
-
-    history = service.get_transactions_by_account(
-
-        account.account_number
-
-    )
-
-    assert len(history) == 3
+    assert service.has_transactions() is False
 
 
-def test_running_balance_not_empty(
+def test_has_transactions_is_true_when_not_empty(
     service,
-    account,
+    transaction_repository,
 ):
+    transaction_repository.__len__.side_effect = lambda: 1
 
-    service.record_deposit(
+    assert service.has_transactions() is True
 
-        account.account_number,
 
-        Money("500"),
-
-    )
-
-    statement = service.generate_statement(
-
-        account.account_number
-
-    )
-
-    assert statement is not None
-
-# ============================================================
-# Save / Load
-# ============================================================
-
-def test_save_transactions(
-    service,
-    account,
-):
-
-    service.record_deposit(
-
-        account.account_number,
-
-        Money("100"),
-
-    )
-
-    service.save()
-
-    assert (
-
-        service.transaction_repository.storage_path.exists()
-
-    )
-
-
-def test_load_transactions(
-    tmp_path,
-    account_repository,
-    account,
-):
-
-    path = tmp_path / "transactions.csv"
-
-    repository = TransactionRepository(
-
-        storage_path=path
-
-    )
-
-    service1 = TransactionService(
-
-        transaction_repository=repository,
-
-        account_repository=account_repository,
-
-    )
-
-    service1.record_deposit(
-
-        account.account_number,
-
-        Money("500"),
-
-    )
-
-    service1.save()
-
-    repository2 = TransactionRepository(
-
-        storage_path=path
-
-    )
-
-    service2 = TransactionService(
-
-        transaction_repository=repository2,
-
-        account_repository=account_repository,
-
-    )
-
-    service2.load()
-
-    assert service2.transaction_count() == 1
-
-# ============================================================
-# Reload Integrity
-# ============================================================
-
-def test_reload_preserves_transactions(
-    tmp_path,
-    account_repository,
-    account,
-):
-
-    path = tmp_path / "transactions.csv"
-
-    repository = TransactionRepository(
-
-        storage_path=path
-
-    )
-
-    service = TransactionService(
-
-        repository,
-
-        account_repository,
-
-    )
-
-    service.record_deposit(
-
-        account.account_number,
-
-        Money("100"),
-
-    )
-
-    service.record_withdrawal(
-
-        account.account_number,
-
-        Money("50"),
-
-    )
-
-    service.save()
-
-    repository2 = TransactionRepository(
-
-        storage_path=path
-
-    )
-
-    service2 = TransactionService(
-
-        repository2,
-
-        account_repository,
-
-    )
-
-    service2.load()
-
-    assert (
-
-        service2.transaction_count()
-
-        == 2
-
-    )
-
-# ============================================================
-# Export / Import
-# ============================================================
-
-def test_export_csv(
-    service,
-    account,
-):
-
-    service.record_deposit(
-
-        account.account_number,
-
-        Money("200"),
-
-    )
-
-    service.export_csv()
-
-    assert (
-
-        service.transaction_repository.storage_path.exists()
-
-    )
-
-
-def test_import_csv(
-    tmp_path,
-    account_repository,
-    account,
-):
-
-    path = tmp_path / "transactions.csv"
-
-    repository = TransactionRepository(
-
-        storage_path=path
-
-    )
-
-    service1 = TransactionService(
-
-        repository,
-
-        account_repository,
-
-    )
-
-    service1.record_deposit(
-
-        account.account_number,
-
-        Money("300"),
-
-    )
-
-    service1.export_csv()
-
-    repository2 = TransactionRepository(
-
-        storage_path=path
-
-    )
-
-    service2 = TransactionService(
-
-        repository2,
-
-        account_repository,
-
-    )
-
-    service2.import_csv()
-
-    assert (
-
-        service2.transaction_count()
-
-        == 1
-
-    )
-
-# ============================================================
-# Repository Synchronization
-# ============================================================
-
-def test_repository_matches_statement(
-    service,
-    account,
-):
-
-    service.record_deposit(
-
-        account.account_number,
-
-        Money("100"),
-
-    )
-
-    service.record_withdrawal(
-
-        account.account_number,
-
-        Money("20"),
-
-    )
-
-    statement = service.generate_statement(
-
-        account.account_number
-
-    )
-
-    repository = service.transaction_repository.get_all()
-
-    assert (
-
-        len(repository)
-
-        ==
-
-        len(statement.transactions)
-
-    )
-
-# PART 4
-
-# ============================================================
-# Repository Synchronization
-# ============================================================
-
-def test_repository_matches_statement(
-    service,
-    account,
-):
-
-    service.record_deposit(
-
-        account.account_number,
-
-        Money("100"),
-
-    )
-
-    service.record_withdrawal(
-
-        account.account_number,
-
-        Money("20"),
-
-    )
-
-    statement = service.generate_statement(
-
-        account.account_number
-
-    )
-
-    repository = service.transaction_repository.get_all()
-
-    assert (
-
-        len(repository)
-
-        ==
-
-        len(statement.transactions)
-
-    )
-
-# ============================================================
+# ---------------------------------------------------------------------------
 # Reporting
-# ============================================================
+# ---------------------------------------------------------------------------
 
-def test_transaction_summary_empty(service):
-
-    summary = service.transaction_summary()
-
-    assert isinstance(summary, dict)
-    assert summary["total_transactions"] == 0
-
-
-def test_transaction_summary_single(
+def test_account_statement_returns_simplified_rows(
     service,
-    account,
+    transaction_repository,
+    account_repository,
 ):
-
-    service.record_deposit(
-
-        account.account_number,
-
-        Money("100"),
-
+    account_repository.get_or_raise.return_value = (
+        make_account()
     )
 
-    summary = service.transaction_summary()
+    transaction = make_transaction(
+        description="Salary",
+    )
+    transaction_repository.find_by_account.return_value = [
+        transaction
+    ]
 
-    assert summary["total_transactions"] == 1
-
-
-def test_transaction_summary_multiple(
-    service,
-    account,
-):
-
-    service.record_deposit(
-        account.account_number,
-        Money("100"),
+    result = service.account_statement(
+        ACCOUNT_NUMBER
     )
 
-    service.record_withdrawal(
-        account.account_number,
-        Money("50"),
+    assert result == [
+        {
+            "transaction_number": TRANSACTION_NUMBER,
+            "date": transaction.transaction_date,
+            "time": transaction.transaction_time,
+            "type": "Deposit",
+            "amount": transaction.amount,
+            "description": "Salary",
+        }
+    ]
+
+
+def test_transaction_summary_returns_expected_fields(
+    service,
+    transaction_repository,
+):
+    transaction = make_transaction()
+    transaction_repository.get_or_raise.return_value = transaction
+
+    result = service.transaction_summary(
+        TRANSACTION_NUMBER
     )
 
-    summary = service.transaction_summary()
+    assert result == {
+        "transaction_number": TRANSACTION_NUMBER,
+        "account_number": ACCOUNT_NUMBER,
+        "transaction_type": "Deposit",
+        "amount": transaction.amount,
+        "currency": "SAR",
+        "date": transaction.transaction_date,
+        "time": transaction.transaction_time,
+        "description": "Test transaction",
+    }
 
-    assert summary["total_transactions"] == 2
 
-# ============================================================
-# Helper Methods
-# ============================================================
-
-def test_service_length(
+def test_transaction_listing_returns_transaction_summaries(
     service,
-    account,
+    transaction_repository,
 ):
+    transaction = make_transaction()
 
-    service.record_deposit(
+    transaction_repository.__iter__.side_effect = (
+        lambda: iter([transaction])
+    )
+    transaction_repository.get_or_raise.return_value = transaction
 
-        account.account_number,
+    result = service.transaction_listing()
 
-        Money("100"),
+    assert len(result) == 1
+    assert result[0]["transaction_number"] == TRANSACTION_NUMBER
+    assert result[0]["account_number"] == ACCOUNT_NUMBER
 
+
+# ---------------------------------------------------------------------------
+# Financial statistics
+# ---------------------------------------------------------------------------
+
+def test_debit_total_sums_debit_transactions(
+    service,
+    transaction_repository,
+    account_repository,
+):
+    account_repository.get_or_raise.return_value = (
+        make_account()
     )
 
-    assert len(service) == 1
-
-
-def test_service_boolean_empty(
-    service,
-):
-
-    assert bool(service) is False
-
-
-def test_service_boolean_non_empty(
-    service,
-    account,
-):
-
-    service.record_deposit(
-
-        account.account_number,
-
-        Money("100"),
-
+    debit = make_transaction(
+        "TX-000001",
+        amount="100.00",
+        transaction_type=make_type(
+            "Withdrawal",
+            is_debit=True,
+            is_credit=False,
+        ),
+    )
+    credit = make_transaction(
+        "TX-000002",
+        amount="50.00",
+        transaction_type=make_type(
+            "Deposit",
+            is_debit=False,
+            is_credit=True,
+        ),
     )
 
-    assert bool(service) is True
+    transaction_repository.find_by_account.return_value = [
+        debit,
+        credit,
+    ]
 
-# ============================================================
-# Iterator Support
-# ============================================================
-
-def test_iteration(
-    service,
-    account,
-):
-
-    for _ in range(10):
-
-        service.record_deposit(
-
-            account.account_number,
-
-            Money("5"),
-
-        )
-
-    count = 0
-
-    for transaction in service:
-
-        assert transaction is not None
-        count += 1
-
-    assert count == 10
-
-# ============================================================
-# Stress Testing
-# ============================================================
-
-def test_create_100_transactions(
-    service,
-    account,
-):
-
-    for _ in range(100):
-
-        service.record_deposit(
-
-            account.account_number,
-
-            Money("1"),
-
-        )
-
-    assert service.transaction_count() == 100
-
-
-def test_large_transaction_history(
-    service,
-    account,
-):
-
-    for _ in range(200):
-
-        service.record_deposit(
-
-            account.account_number,
-
-            Money("2"),
-
-        )
-
-    history = service.get_transactions_by_account(
-
-        account.account_number
-
+    result = service.debit_total(
+        ACCOUNT_NUMBER
     )
 
-    assert len(history) == 200
+    assert result.amount == Decimal("100.00")
+    assert result.currency == "SAR"
 
 
-def test_high_volume_mixed_transactions(
+def test_credit_total_sums_credit_transactions(
     service,
-    account,
+    transaction_repository,
+    account_repository,
 ):
-
-    for _ in range(50):
-
-        service.record_deposit(
-
-            account.account_number,
-
-            Money("20"),
-
-        )
-
-        service.record_withdrawal(
-
-            account.account_number,
-
-            Money("10"),
-
-        )
-
-    assert service.transaction_count() == 100
-
-# ============================================================
-# Stress Testing
-# ============================================================
-
-def test_create_100_transactions(
-    service,
-    account,
-):
-
-    for _ in range(100):
-
-        service.record_deposit(
-
-            account.account_number,
-
-            Money("1"),
-
-        )
-
-    assert service.transaction_count() == 100
-
-
-def test_large_transaction_history(
-    service,
-    account,
-):
-
-    for _ in range(200):
-
-        service.record_deposit(
-
-            account.account_number,
-
-            Money("2"),
-
-        )
-
-    history = service.get_transactions_by_account(
-
-        account.account_number
-
+    account_repository.get_or_raise.return_value = (
+        make_account()
     )
 
-    assert len(history) == 200
+    debit = make_transaction(
+        "TX-000001",
+        amount="100.00",
+        transaction_type=make_type(
+            "Withdrawal",
+            is_debit=True,
+            is_credit=False,
+        ),
+    )
+    credit = make_transaction(
+        "TX-000002",
+        amount="50.00",
+        transaction_type=make_type(
+            "Deposit",
+            is_debit=False,
+            is_credit=True,
+        ),
+    )
+
+    transaction_repository.find_by_account.return_value = [
+        debit,
+        credit,
+    ]
+
+    result = service.credit_total(
+        ACCOUNT_NUMBER
+    )
+
+    assert result.amount == Decimal("50.00")
+    assert result.currency == "SAR"
 
 
-def test_high_volume_mixed_transactions(
+def test_statistics_returns_total_transaction_count(
     service,
-    account,
+    transaction_repository,
 ):
+    transaction_repository.__len__.side_effect = lambda: 4
 
-    for _ in range(50):
+    assert service.statistics() == {
+        "total_transactions": 4,
+    }
 
-        service.record_deposit(
 
-            account.account_number,
-
-            Money("20"),
-
-        )
-
-        service.record_withdrawal(
-
-            account.account_number,
-
-            Money("10"),
-
-        )
-
-    assert service.transaction_count() == 100
-
-# ============================================================
-# Edge Cases
-# ============================================================
-
-def test_empty_service_transactions(
+def test_account_statistics_returns_expected_values(
     service,
+    transaction_repository,
+    account_repository,
 ):
+    account_repository.get_or_raise.return_value = (
+        make_account()
+    )
 
-    assert service.get_all_transactions() == []
+    debit = make_transaction(
+        "TX-000001",
+        amount="100.00",
+        transaction_type=make_type(
+            "Withdrawal",
+            is_debit=True,
+            is_credit=False,
+        ),
+    )
+    credit = make_transaction(
+        "TX-000002",
+        amount="50.00",
+        transaction_type=make_type(
+            "Deposit",
+            is_debit=False,
+            is_credit=True,
+        ),
+    )
+
+    transaction_repository.find_by_account.return_value = [
+        debit,
+        credit,
+    ]
+
+    result = service.account_statistics(
+        ACCOUNT_NUMBER
+    )
+
+    assert result["account_number"] == ACCOUNT_NUMBER
+    assert result["transaction_count"] == 2
+    assert result["total_debits"].amount == Decimal("100.00")
+    assert result["total_credits"].amount == Decimal("50.00")
 
 
-def test_empty_transaction_count(
+def test_average_transaction_amount_returns_zero_when_empty(
     service,
+    transaction_repository,
+    account_repository,
 ):
+    account_repository.get_or_raise.return_value = (
+        make_account()
+    )
+    transaction_repository.find_by_account.return_value = []
 
-    assert service.transaction_count() == 0
+    result = service.average_transaction_amount(
+        ACCOUNT_NUMBER
+    )
+
+    assert result.amount == Decimal("0.00")
+    assert result.currency == "SAR"
 
 
-def test_clear_service(
+def test_average_transaction_amount_returns_average(
     service,
-    account,
+    transaction_repository,
+    account_repository,
 ):
+    account_repository.get_or_raise.return_value = (
+        make_account()
+    )
 
-    for _ in range(5):
+    transactions = [
+        make_transaction(
+            "TX-000001",
+            amount="100.00",
+        ),
+        make_transaction(
+            "TX-000002",
+            amount="300.00",
+        ),
+    ]
+    transaction_repository.find_by_account.return_value = transactions
 
-        service.record_deposit(
+    result = service.average_transaction_amount(
+        ACCOUNT_NUMBER
+    )
 
-            account.account_number,
+    assert result.amount == Decimal("200.00")
+    assert result.currency == "SAR"
 
-            Money("100"),
 
-        )
-
-    service.clear()
-
-    assert service.transaction_count() == 0
-
-# ============================================================
-# Integrity Checks
-# ============================================================
-
-def test_transaction_ids_are_unique(
+def test_largest_transaction_returns_largest_amount(
     service,
-    account,
+    transaction_repository,
+    account_repository,
 ):
+    account_repository.get_or_raise.return_value = (
+        make_account()
+    )
 
-    ids = set()
+    smaller = make_transaction(
+        "TX-000001",
+        amount="100.00",
+    )
+    larger = make_transaction(
+        "TX-000002",
+        amount="500.00",
+    )
+    transaction_repository.find_by_account.return_value = [
+        smaller,
+        larger,
+    ]
 
-    for _ in range(20):
-
-        tx = service.record_deposit(
-
-            account.account_number,
-
-            Money("10"),
-
-        )
-
-        assert tx.transaction_id not in ids
-
-        ids.add(tx.transaction_id)
+    assert service.largest_transaction(
+        ACCOUNT_NUMBER
+    ) is larger
 
 
-def test_all_transactions_have_timestamp(
+def test_largest_transaction_returns_none_when_empty(
     service,
-    account,
+    transaction_repository,
+    account_repository,
 ):
+    account_repository.get_or_raise.return_value = (
+        make_account()
+    )
+    transaction_repository.find_by_account.return_value = []
 
-    for _ in range(10):
+    assert service.largest_transaction(
+        ACCOUNT_NUMBER
+    ) is None
 
-        tx = service.record_deposit(
 
-            account.account_number,
+def test_customer_statistics_returns_customer_count(
+    service,
+    transaction_repository,
+):
+    transactions = [
+        make_transaction("TX-000001"),
+        make_transaction("TX-000002"),
+    ]
+    transaction_repository.find_by_customer.return_value = transactions
 
-            Money("5"),
+    assert service.customer_statistics(
+        CUSTOMER_NUMBER
+    ) == {
+        "customer_number": CUSTOMER_NUMBER,
+        "transaction_count": 2,
+    }
 
-        )
 
-        assert tx.transaction_date is not None
+def test_repository_statistics_delegates_to_repository(
+    service,
+    transaction_repository,
+):
+    expected = {
+        "total_transactions": 5,
+        "completed_transactions": 4,
+    }
+    transaction_repository.statistics.return_value = expected
 
+    assert service.repository_statistics() == expected
+
+
+# ---------------------------------------------------------------------------
+# Repository operations
+# ---------------------------------------------------------------------------
+
+def test_refresh_delegates_to_repository_reload(
+    service,
+    transaction_repository,
+):
+    service.refresh()
+
+    transaction_repository.reload.assert_called_once()
+
+
+def test_save_changes_delegates_to_repository_flush(
+    service,
+    transaction_repository,
+):
+    service.save_changes()
+
+    transaction_repository.flush.assert_called_once()
+
+
+def test_validate_repository_returns_true_when_count_matches_length(
+    service,
+    transaction_repository,
+):
+    transaction_repository.count = 3
+    transaction_repository.__len__.side_effect = lambda: 3
+
+    assert service.validate_repository() is True
+
+
+def test_validate_repository_returns_false_when_count_differs(
+    service,
+    transaction_repository,
+):
+    transaction_repository.count = 3
+    transaction_repository.__len__.side_effect = lambda: 2
+
+    assert service.validate_repository() is False
+
+
+def test_ensure_repository_is_valid_does_not_raise_when_valid(
+    service,
+    transaction_repository,
+):
+    transaction_repository.count = 2
+    transaction_repository.__len__.side_effect = lambda: 2
+
+    service.ensure_repository_is_valid()
+
+
+def test_ensure_repository_is_valid_raises_when_invalid(
+    service,
+    transaction_repository,
+):
+    transaction_repository.count = 2
+    transaction_repository.__len__.side_effect = lambda: 1
+
+    with pytest.raises(
+        PersistenceError,
+        match="integrity validation failed",
+    ):
+        service.ensure_repository_is_valid()
+
+
+# ---------------------------------------------------------------------------
+# Date reporting helpers
+# ---------------------------------------------------------------------------
+
+def test_transactions_on_returns_matching_date(
+    service,
+    transaction_repository,
+):
+    target = date(2026, 8, 7)
+    matching = make_transaction(
+        "TX-000001",
+        transaction_date=target,
+    )
+    other = make_transaction(
+        "TX-000002",
+        transaction_date=date(2026, 8, 6),
+    )
+
+    transaction_repository.__iter__.side_effect = (
+        lambda: iter([matching, other])
+    )
+
+    assert service.transactions_on(target) == [matching]
+
+
+def test_transactions_before_returns_older_transactions(
+    service,
+    transaction_repository,
+):
+    cutoff = date(2026, 8, 7)
+    older = make_transaction(
+        "TX-000001",
+        transaction_date=date(2026, 8, 6),
+    )
+    newer = make_transaction(
+        "TX-000002",
+        transaction_date=date(2026, 8, 8),
+    )
+
+    transaction_repository.__iter__.side_effect = (
+        lambda: iter([older, newer])
+    )
+
+    assert service.transactions_before(cutoff) == [older]
+
+
+def test_transactions_after_returns_newer_transactions(
+    service,
+    transaction_repository,
+):
+    cutoff = date(2026, 8, 7)
+    older = make_transaction(
+        "TX-000001",
+        transaction_date=date(2026, 8, 6),
+    )
+    newer = make_transaction(
+        "TX-000002",
+        transaction_date=date(2026, 8, 8),
+    )
+
+    transaction_repository.__iter__.side_effect = (
+        lambda: iter([older, newer])
+    )
+
+    assert service.transactions_after(cutoff) == [newer]
+
+
+# ---------------------------------------------------------------------------
+# Chronological helpers
+# ---------------------------------------------------------------------------
+
+def test_latest_transaction_returns_latest(
+    service,
+    transaction_repository,
+    account_repository,
+):
+    account_repository.get_or_raise.return_value = (
+        make_account()
+    )
+
+    older = make_transaction(
+        "TX-000001",
+        transaction_date=date(2026, 8, 6),
+        transaction_time=time(12, 0),
+    )
+    newer = make_transaction(
+        "TX-000002",
+        transaction_date=date(2026, 8, 7),
+        transaction_time=time(9, 0),
+    )
+
+    transaction_repository.find_by_account.return_value = [
+        older,
+        newer,
+    ]
+
+    assert service.latest_transaction(
+        ACCOUNT_NUMBER
+    ) is newer
+
+
+def test_latest_transaction_returns_none_when_empty(
+    service,
+    transaction_repository,
+    account_repository,
+):
+    account_repository.get_or_raise.return_value = (
+        make_account()
+    )
+    transaction_repository.find_by_account.return_value = []
+
+    assert service.latest_transaction(
+        ACCOUNT_NUMBER
+    ) is None
+
+
+def test_first_transaction_returns_earliest(
+    service,
+    transaction_repository,
+    account_repository,
+):
+    account_repository.get_or_raise.return_value = (
+        make_account()
+    )
+
+    older = make_transaction(
+        "TX-000001",
+        transaction_date=date(2026, 8, 6),
+        transaction_time=time(12, 0),
+    )
+    newer = make_transaction(
+        "TX-000002",
+        transaction_date=date(2026, 8, 7),
+        transaction_time=time(9, 0),
+    )
+
+    transaction_repository.find_by_account.return_value = [
+        newer,
+        older,
+    ]
+
+    assert service.first_transaction(
+        ACCOUNT_NUMBER
+    ) is older
+
+
+def test_first_transaction_returns_none_when_empty(
+    service,
+    transaction_repository,
+    account_repository,
+):
+    account_repository.get_or_raise.return_value = (
+        make_account()
+    )
+    transaction_repository.find_by_account.return_value = []
+
+    assert service.first_transaction(
+        ACCOUNT_NUMBER
+    ) is None
+
+
+# ---------------------------------------------------------------------------
+# Display
+# ---------------------------------------------------------------------------
+
+def test_str_contains_transaction_count(
+    service,
+    transaction_repository,
+):
+    transaction_repository.__len__.side_effect = lambda: 3
+
+    assert str(service) == (
+        "TransactionService(transactions=3)"
+    )
+
+
+def test_repr_contains_repository_and_count(
+    service,
+    transaction_repository,
+):
+    transaction_repository.__len__.side_effect = lambda: 2
+
+    result = repr(service)
+
+    assert "TransactionService" in result
+    assert "repository=MagicMock" in result
+    assert "transactions=2" in result

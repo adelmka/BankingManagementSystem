@@ -18,7 +18,12 @@ from abc import ABC
 from typing import Generic
 from typing import TypeVar
 
+from contextlib import contextmanager
+from collections.abc import Iterator
+
 from repositories.base_repository import BaseRepository
+
+from exceptions import EntityNotFoundError
 
 T = TypeVar("T")
 
@@ -322,9 +327,6 @@ class BaseService(
         return
 
 # PART 4
-
-from contextlib import contextmanager
-from collections.abc import Iterator
 
     # ------------------------------------------------------------------
     # Operation Scope

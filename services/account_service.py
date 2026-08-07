@@ -33,6 +33,11 @@ from repositories.transaction_repository import (
 
 from services.base_service import BaseService
 
+from exceptions import (
+    EntityAlreadyExistsError,
+    ValidationError,
+)
+
 
 class AccountService(
     BaseService[Account],

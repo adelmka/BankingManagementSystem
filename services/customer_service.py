@@ -24,6 +24,11 @@ from repositories.customer_repository import (
 
 from services.base_service import BaseService
 
+from exceptions import (
+    EntityAlreadyExistsError,
+    EntityNotFoundError,
+    ValidationError,
+)
 
 class CustomerService(
     BaseService[Customer],
@@ -96,15 +101,21 @@ class CustomerService(
     def find_customer(
         self,
         customer_number: str,
+        *,
+        active_only: bool = True,
     ) -> Customer | None:
         """
         Return the customer with the specified customer number.
+
+        By default, only active customers are returned.
+        Set active_only=False to include inactive customers.
         """
 
         return (
             self._repository
             .find_by_customer_number(
-                customer_number
+                customer_number,
+                active_only=active_only,
             )
         )
 
@@ -165,6 +176,10 @@ class CustomerService(
     # Customer Maintenance
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Customer Lifecycle
+    # ------------------------------------------------------------------
+
     def update_customer(
         self,
         customer: Customer,
@@ -181,9 +196,16 @@ class CustomerService(
             customer
         )
 
+        if not self._repository.exists(
+            customer.entity_id
+        ):
+            raise EntityNotFoundError(
+                f"Customer '{customer.customer_id}' does not exist."
+            )
+
         with self._operation_scope():
 
-            self._repository.save_customer(
+            self._repository.save_entity(
                 customer
             )
 
@@ -193,27 +215,6 @@ class CustomerService(
 
         return customer
 
-    # ------------------------------------------------------------------
-    # Customer Lifecycle
-    # ------------------------------------------------------------------
-
-    def activate_customer(
-        self,
-        customer_number: str,
-    ) -> Customer:
-        """
-        Activate a customer.
-        """
-
-        customer = self.get_customer(
-            customer_number
-        )
-
-        customer.activate()
-
-        return self.update_customer(
-            customer
-        )
 
     # ------------------------------------------------------------------
 
@@ -222,21 +223,42 @@ class CustomerService(
         customer_number: str,
     ) -> Customer:
         """
-        Deactivate a customer.
+        Deactivate an active customer.
         """
 
         customer = self.get_customer(
             customer_number
         )
 
-        customer.deactivate()
+        customer.close_customer()
+
+        return self.update_customer(
+            customer
+        )
+        
+    # ------------------------------------------------------------------
+
+    def activate_customer(
+        self,
+        customer_number: str,
+    ) -> Customer:
+        """
+        Activate a previously inactive customer.
+        """
+
+        customer = self._repository.get_or_raise(
+            customer_number,
+            active_only=False,
+        )
+
+        customer.activate_customer()
 
         return self.update_customer(
             customer
         )
 
     # ------------------------------------------------------------------
-
+    
     def reactivate_customer(
         self,
         customer_number: str,
@@ -248,6 +270,7 @@ class CustomerService(
         return self.activate_customer(
             customer_number
         )
+
 
     # ------------------------------------------------------------------
 
@@ -292,12 +315,9 @@ class CustomerService(
         """
 
         if customer is None:
-
             raise ValidationError(
                 "Customer cannot be None."
             )
-
-        customer.validate()
 
 # PART 3
 

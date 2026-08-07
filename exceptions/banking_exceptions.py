@@ -95,6 +95,13 @@ class InvalidAmountError(ValidationError):
 class CurrencyMismatchError(ValidationError):
     """Different currencies used in one operation."""
 
+class InvalidCurrencyError(ValidationError):
+    """
+    Raised when an unsupported or invalid currency is supplied.
+
+    Backward compatibility for legacy models/tests.
+    """
+    pass
 
 # ===================================================================
 # Customer
@@ -326,3 +333,6 @@ class EntityNotFoundError(BankingError):
 
 class UnsupportedOperationError(BankingError):
     """Unsupported Operation Error."""
+
+class PersistenceError(TransactionError):
+    """Persistence Error."""

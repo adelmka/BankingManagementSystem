@@ -271,3 +271,25 @@ config = {
     "default": DevelopmentConfig
 
 }
+
+# ------------------------------------------------------------------
+# Backward Compatibility
+# ------------------------------------------------------------------
+
+APP_NAME = Config.APP_NAME
+APP_VERSION = Config.APP_VERSION
+
+BASE_DIR = Config.BASE_DIR
+DATA_DIR = Config.DATA_DIR
+LOG_DIR = Config.LOG_DIR
+
+CUSTOMERS_FILE = Config.CUSTOMERS_FILE
+ACCOUNTS_FILE = Config.ACCOUNTS_FILE
+TRANSACTIONS_FILE = Config.TRANSACTIONS_FILE
+USERS_FILE = Config.USERS_FILE
+EMPLOYEES_FILE = Config.EMPLOYEES_FILE
+FEES_FILE = Config.FEES_FILE
+INTEREST_FILE = Config.INTEREST_FILE
+SETTINGS_FILE = Config.SETTINGS_FILE
+AUDIT_FILE = Config.AUDIT_FILE
+BANKS_FILE = Config.BANKS_FILE

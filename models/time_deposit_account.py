@@ -72,9 +72,7 @@ class TimeDepositAccount(Account):
             self._early_withdrawal_penalty_rate = (
                 Decimal("0.00")
             )
-            self._last_interest_date = (
-                datetime.now(UTC).date()
-            )
+            self._last_interest_date = self._last_interest_date = date.today()
 
             self.interest_rate = interest_rate
             self.term_months = term_months
@@ -290,7 +288,7 @@ class TimeDepositAccount(Account):
         value: date,
     ) -> None:
 
-        Validator.date_not_in_future(
+        Validator.date_not_future(
             value,
             "Last Interest Date",
         )
@@ -469,7 +467,7 @@ class TimeDepositAccount(Account):
         self.last_interest_date = (
             application_date
             if application_date is not None
-            else datetime.now(UTC).date()
+            else date.today()
         )
 
 # PART 4

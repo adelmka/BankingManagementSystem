@@ -205,7 +205,7 @@ class SavingsAccount(Account):
         Update the last interest application date.
         """
 
-        Validator.date_not_in_future(
+        Validator.date_not_future(
             value,
             "Last Interest Date",
         )

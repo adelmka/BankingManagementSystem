@@ -75,14 +75,15 @@ class Customer(Person):
         try:
             self._customer_id = ""
             self._customer_status = CustomerStatus.ACTIVE
-            self._registration_date = (
-                registration_date or datetime.now(UTC).date()
-            )
+            self._registration_date = date.today() #datetime.now(UTC).date()
             self._kyc_completed = False
             self._accounts: list[str] = []
 
             self.customer_id = customer_id
             self.customer_status = customer_status
+            self.registration_date = (
+                registration_date or date.today() #datetime.now(UTC).date()
+            )
             self.kyc_completed = kyc_completed
 
         finally:
@@ -157,8 +158,9 @@ class Customer(Person):
         """
         Set the customer registration date.
         """
-
-        Validator.date_not_in_future(
+        # print(f"registration_date setter called: {value}")
+        
+        Validator.date_not_future(
             value,
             "Registration Date",
         )
@@ -339,7 +341,7 @@ class Customer(Person):
         Historical information is preserved.
         """
 
-        self.customer_status = CustomerStatus.CLOSED
+        self.customer_status = CustomerStatus.INACTIVE
 
         self.deactivate()
 
@@ -643,5 +645,4 @@ class Customer(Person):
 # ----------------------------------------------------------------------
 # End of File
 # ----------------------------------------------------------------------
-
 

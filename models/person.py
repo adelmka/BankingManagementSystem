@@ -164,7 +164,7 @@ class Person(BaseEntity, ABC):
 
     @date_of_birth.setter
     def date_of_birth(self, value: date) -> None:
-        Validator.date_not_in_future(value, "Date of Birth")
+        Validator.date_not_future(value, "Date of Birth")
 
         self._date_of_birth = value
         self.touch()

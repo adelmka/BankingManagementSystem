@@ -67,7 +67,7 @@ class CurrentAccount(Account):
             self._maintenance_fee = maintenance_fee
             self._overdraft_fee = overdraft_fee
             self._overdraft_enabled = overdraft_enabled
-            self._last_fee_date = datetime.now(UTC).date()
+            self._last_fee_date = date.today()
 
             self.overdraft_limit = overdraft_limit
             self.maintenance_fee = maintenance_fee
@@ -250,7 +250,7 @@ class CurrentAccount(Account):
         Update the last fee application date.
         """
 
-        Validator.date_not_in_future(
+        Validator.date_not_future(
             value,
             "Last Fee Date",
         )
@@ -436,7 +436,7 @@ class CurrentAccount(Account):
         self.last_fee_date = (
             application_date
             if application_date is not None
-            else datetime.now(UTC).date()
+            else date.today()
         )
 
     # ------------------------------------------------------------------

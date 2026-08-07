@@ -15,7 +15,9 @@ Python      : 3.13+
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
 from models.base_entity import BaseEntity
 from models.value_objects.money import Money
@@ -50,6 +52,7 @@ class Transaction(BaseEntity):
         initiated_by: str,
         description: str = "",
         reference_number: str | None = None,
+        transaction_status: TransactionStatus = TransactionStatus.COMPLETED,
     ) -> None:
 
         super().__init__()
@@ -88,9 +91,16 @@ class Transaction(BaseEntity):
         )
 
         self._transaction_type = transaction_type
-        self._transaction_status = (
-            TransactionStatus.COMPLETED
-        )
+        
+        if not isinstance(
+            transaction_status,
+            TransactionStatus,
+        ):
+            raise TypeError(
+                "transaction_status must be a TransactionStatus."
+            )
+
+        self._transaction_status = transaction_status
 
         self._amount = amount
 
@@ -409,11 +419,14 @@ class Transaction(BaseEntity):
     # ------------------------------------------------------------------
 
     def is_transfer(self) -> bool:
-        return (
-            self.transaction_type
-            == TransactionType.TRANSFER
-        )
+        """
+        Determine whether this transaction is any type of transfer.
+        """
 
+        return self.transaction_type in (
+            TransactionType.INTERNAL_TRANSFER,
+            TransactionType.EXTERNAL_TRANSFER,
+        )
     # ------------------------------------------------------------------
 
     def is_deposit(self) -> bool:
@@ -541,9 +554,12 @@ class Transaction(BaseEntity):
                 data["reference_number"] or None
             ),
 
-            transaction_status=TransactionStatus(
+        )
+
+        transaction._transaction_status= (
+            TransactionStatus(
                 data["transaction_status"]
-            ),
+            )
         )
 
         transaction._transaction_date = (
@@ -702,7 +718,6 @@ class Transaction(BaseEntity):
         return self.transaction_type in (
             TransactionType.DEPOSIT,
             TransactionType.INTEREST,
-            TransactionType.TRANSFER_IN,
         )
 
     # ------------------------------------------------------------------
@@ -716,7 +731,6 @@ class Transaction(BaseEntity):
             TransactionType.WITHDRAWAL,
             TransactionType.FEE,
             TransactionType.PENALTY,
-            TransactionType.TRANSFER_OUT,
         )
 
     # ------------------------------------------------------------------
@@ -727,7 +741,7 @@ class Transaction(BaseEntity):
         """
 
         return (
-            self.transaction_type == TransactionType.TRANSFER
+            self.transaction_type == TransactionType.INTERNAL_TRANSFER
             and bool(self.source_account)
             and bool(self.destination_account)
         )
@@ -746,7 +760,10 @@ class Transaction(BaseEntity):
             Penalty
         """
 
-        return not self.is_internal_transfer()
+        return (
+            self.transaction_type
+            != TransactionType.INTERNAL_TRANSFER
+        )
 
     # ------------------------------------------------------------------
 
@@ -784,9 +801,8 @@ class Transaction(BaseEntity):
         return self.transaction_type in (
             TransactionType.DEPOSIT,
             TransactionType.WITHDRAWAL,
-            TransactionType.TRANSFER,
-            TransactionType.TRANSFER_IN,
-            TransactionType.TRANSFER_OUT,
+            TransactionType.INTERNAL_TRANSFER,
+            TransactionType.EXTERNAL_TRANSFER,
             TransactionType.INTEREST,
             TransactionType.FEE,
             TransactionType.PENALTY,
@@ -915,11 +931,7 @@ class Transaction(BaseEntity):
         applying the financial effects and persisting both records.
         """
 
-        reference = (
-            self.reference_number
-            if self.reference_number
-            else self.transaction_number
-        )
+        reference = self.transaction_number
 
         reversal = Transaction(
             transaction_number=transaction_number,
@@ -932,7 +944,7 @@ class Transaction(BaseEntity):
                 f"Reversal of transaction "
                 f"{self.transaction_number}"
             ),
-            reference_number=reference,
+            reference_number=self.transaction_number,
             transaction_status=TransactionStatus.PENDING,
         )
 

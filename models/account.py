@@ -75,7 +75,7 @@ class Account(BaseEntity, ABC):
             self._status = status
 
             self._opened_date = (
-                opened_date or datetime.now(UTC).date()
+                opened_date or date.today()
             )
 
             self._closed_date: date | None = None

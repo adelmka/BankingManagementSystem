@@ -32,10 +32,12 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from utils.generators import Generator
+# for backward compatibility
+# from utils.generators import Generator
 
+from utils.generators import IDGenerator
 
 class BaseEntity(ABC):
     """
@@ -51,9 +53,9 @@ class BaseEntity(ABC):
         Initialize a new entity.
         """
 
-        self._entity_id: UUID = Generator.uuid()
+        self._entity_id: UUID = uuid4()
 
-        self._created_at: datetime = datetime.now()
+        self._created_at: datetime = datetime.now(UTC)
 
         self._updated_at: datetime = self._created_at
 

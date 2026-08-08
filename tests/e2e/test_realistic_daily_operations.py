@@ -77,6 +77,11 @@ def create_customer(customer_service, customer_number: str):
     # 10 or 12 digits. The final three digits keep each test customer unique.
     numeric_id = "100000000" + customer_number[-3:]
 
+    # CustomerRepository enforces mobile-number uniqueness. Generate a
+    # deterministic unique mobile number for each E2E customer.
+    mobile_suffix = int(customer_number[-3:])
+    phone_number = f"+966501000{mobile_suffix:03d}"
+
     customer = customer_service.register_customer(
         Customer(
             customer_id=customer_number,
@@ -86,7 +91,7 @@ def create_customer(customer_service, customer_number: str):
             gender=Gender.MALE,
             national_id=numeric_id,
             email=f"{customer_number.lower()}@bank.com",
-            phone_number="+966501111111",
+            phone_number=phone_number,
             address=Address(
                 address_line_1="123 Main Street",
                 address_line_2="",

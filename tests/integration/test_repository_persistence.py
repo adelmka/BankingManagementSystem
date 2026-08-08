@@ -3,10 +3,8 @@
 from decimal import Decimal
 
 from models.savings_account import SavingsAccount
-from models.transaction import Transaction
 from models.value_objects.money import Money
-from utils.constants import TransactionType
-from tests.integration.conftest import make_customer
+from tests.integration.conftest import make_customer, make_transaction
 
 
 def register_customer(customer_service, index=1):
@@ -24,18 +22,6 @@ def open_account(account_service, index=1, balance="1000"):
             interest_rate=Decimal("0.025"),
             minimum_balance=Money("0"),
         )
-    )
-
-
-def make_transaction(number, account_number):
-    return Transaction(
-        transaction_number=number,
-        transaction_type=TransactionType.DEPOSIT,
-        amount=Money("250"),
-        source_account=None,
-        destination_account=account_number,
-        initiated_by="integration-test",
-        description="Persistence test",
     )
 
 
@@ -60,7 +46,7 @@ def test_account_repository_persistence(customer_service, account_service, reloa
 def test_transaction_repository_persistence(customer_service, account_service, transaction_service, reload_transaction_repository):
     register_customer(customer_service)
     open_account(account_service)
-    transaction_service.record_transaction(make_transaction("TXN001", "SAV001"))
+    transaction_service.record_transaction(make_transaction("TXN001", account_number="SAV001"))
     repository = reload_transaction_repository()
     transactions = list(repository)
     assert len(transactions) == 1
@@ -96,7 +82,7 @@ def test_full_system_restart(
 ):
     register_customer(customer_service)
     open_account(account_service)
-    transaction_service.record_transaction(make_transaction("TXN001", "SAV001"))
+    transaction_service.record_transaction(make_transaction("TXN001", account_number="SAV001"))
 
     customer_repo = reload_customer_repository()
     account_repo = reload_account_repository()

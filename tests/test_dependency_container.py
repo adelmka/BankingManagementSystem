@@ -1,6 +1,6 @@
 """Tests for the existing DependencyContainer public contract."""
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -108,7 +108,10 @@ class TestDependencyContainer:
         with patch("application.dependency_container.get_logger", return_value=logger), patch(
             "application.dependency_container.CustomerRepository",
             return_value=dependencies["customer_repository"],
-        ), patch("application.dependency_container.AccountRepository", return_value=dependencies["account_repository"]), patch(
+        ), patch(
+            "application.dependency_container.AccountRepository",
+            return_value=dependencies["account_repository"],
+        ), patch(
             "application.dependency_container.TransactionRepository",
             return_value=dependencies["transaction_repository"],
         ), patch(
@@ -136,16 +139,25 @@ class TestDependencyContainer:
         with patch("application.dependency_container.get_logger", return_value=logger), patch(
             "application.dependency_container.CustomerRepository",
             return_value=dependencies["customer_repository"],
-        ), patch("application.dependency_container.AccountRepository", return_value=dependencies["account_repository"]), patch(
+        ), patch(
+            "application.dependency_container.AccountRepository",
+            return_value=dependencies["account_repository"],
+        ), patch(
             "application.dependency_container.TransactionRepository",
             return_value=dependencies["transaction_repository"],
-        ), patch("application.dependency_container.CustomerService", return_value=dependencies["customer_service"]), patch(
+        ), patch(
+            "application.dependency_container.CustomerService",
+            return_value=dependencies["customer_service"],
+        ), patch(
             "application.dependency_container.AccountService",
             return_value=dependencies["account_service"],
         ) as account_service, patch(
             "application.dependency_container.TransactionService",
             return_value=dependencies["transaction_service"],
-        ), patch("application.dependency_container.BankService", return_value=dependencies["bank_service"]):
+        ), patch(
+            "application.dependency_container.BankService",
+            return_value=dependencies["bank_service"],
+        ):
             DependencyContainer(config=config)
 
         account_service.assert_called_once_with(
@@ -160,10 +172,16 @@ class TestDependencyContainer:
         with patch("application.dependency_container.get_logger", return_value=logger), patch(
             "application.dependency_container.CustomerRepository",
             return_value=dependencies["customer_repository"],
-        ), patch("application.dependency_container.AccountRepository", return_value=dependencies["account_repository"]), patch(
+        ), patch(
+            "application.dependency_container.AccountRepository",
+            return_value=dependencies["account_repository"],
+        ), patch(
             "application.dependency_container.TransactionRepository",
             return_value=dependencies["transaction_repository"],
-        ), patch("application.dependency_container.CustomerService", return_value=dependencies["customer_service"]), patch(
+        ), patch(
+            "application.dependency_container.CustomerService",
+            return_value=dependencies["customer_service"],
+        ), patch(
             "application.dependency_container.AccountService",
             return_value=dependencies["account_service"],
         ), patch(
@@ -184,10 +202,16 @@ class TestDependencyContainer:
         with patch("application.dependency_container.get_logger", return_value=logger), patch(
             "application.dependency_container.CustomerRepository",
             return_value=dependencies["customer_repository"],
-        ), patch("application.dependency_container.AccountRepository", return_value=dependencies["account_repository"]), patch(
+        ), patch(
+            "application.dependency_container.AccountRepository",
+            return_value=dependencies["account_repository"],
+        ), patch(
             "application.dependency_container.TransactionRepository",
             return_value=dependencies["transaction_repository"],
-        ), patch("application.dependency_container.CustomerService", return_value=dependencies["customer_service"]), patch(
+        ), patch(
+            "application.dependency_container.CustomerService",
+            return_value=dependencies["customer_service"],
+        ), patch(
             "application.dependency_container.AccountService",
             return_value=dependencies["account_service"],
         ), patch(
@@ -261,41 +285,43 @@ class TestDependencyContainer:
         }
 
     def test_build_validates_and_returns_container(self, config):
-        fake_container = MagicMock()
-        fake_container.validate.return_value = True
-        fake_container.logger = MagicMock()
+        logger = MagicMock()
 
-        with patch.object(
-            DependencyContainer,
-            "__new__",
-            return_value=fake_container,
-        ), patch.object(DependencyContainer, "__init__", return_value=None):
-            result = DependencyContainer.build(config)
+        class TestContainer(DependencyContainer):
+            def __init__(self, supplied_config):
+                self._config = supplied_config
+                self._logger = logger
 
-        fake_container.validate.assert_called_once_with()
-        fake_container.logger.info.assert_called_once_with(
+            def validate(self):
+                return True
+
+        result = TestContainer.build(config)
+
+        assert result.__class__ is TestContainer
+        assert result.config is config
+        assert result.logger is logger
+        result.logger.info.assert_called_once_with(
             "Dependency Container successfully built."
         )
-        assert result is fake_container
 
     def test_build_raises_when_validation_fails(self, config):
-        fake_container = MagicMock()
-        fake_container.validate.return_value = False
-        fake_container.logger = MagicMock()
+        logger = MagicMock()
 
-        with patch.object(
-            DependencyContainer,
-            "__new__",
-            return_value=fake_container,
-        ), patch.object(DependencyContainer, "__init__", return_value=None):
-            with pytest.raises(
-                RuntimeError,
-                match="Dependency container validation failed",
-            ):
-                DependencyContainer.build(config)
+        class TestContainer(DependencyContainer):
+            def __init__(self, supplied_config):
+                self._config = supplied_config
+                self._logger = logger
 
-        fake_container.validate.assert_called_once_with()
-        fake_container.logger.info.assert_not_called()
+            def validate(self):
+                return False
+
+        with pytest.raises(
+            RuntimeError,
+            match="Dependency container validation failed",
+        ):
+            TestContainer.build(config)
+
+        logger.info.assert_not_called()
 
     def test_shutdown_logs_completion(self, container):
         assert container.shutdown() is None

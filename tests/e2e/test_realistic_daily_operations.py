@@ -14,6 +14,7 @@ from application.bootstrap import Bootstrap
 from repositories.account_repository import AccountRepository
 from repositories.customer_repository import CustomerRepository
 
+from models.customer import Customer
 from models.current_account import CurrentAccount
 from models.savings_account import SavingsAccount
 from models.value_objects.address import Address
@@ -25,14 +26,16 @@ from utils.constants import Gender, CustomerStatus
 def create_customer(customer_service, customer_number: str):
     """Create and register a complete customer through the service layer."""
 
+    numeric_id = "100000000000" + customer_number[-3:]
+
     customer = customer_service.register_customer(
-        __import__("models.customer", fromlist=["Customer"]).Customer(
+        Customer(
             customer_id=customer_number,
             first_name="John",
             last_name="Smith",
             date_of_birth=date(1990, 1, 15),
             gender=Gender.MALE,
-            national_id=f"NID{customer_number}",
+            national_id=numeric_id,
             email=f"{customer_number.lower()}@bank.com",
             phone_number="+966501111111",
             address=Address(

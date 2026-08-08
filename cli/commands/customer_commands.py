@@ -85,7 +85,7 @@ class CustomerCommands:
 
             self.logger.exception(
                 "Failed to create customer: %s",
-                exc,
+                str(exc),
             )
 
             self.menu_renderer.display_error(
@@ -120,7 +120,7 @@ class CustomerCommands:
 
             self.logger.exception(
                 "Failed to retrieve customer: %s",
-                exc,
+                str(exc),
             )
 
             self.menu_renderer.display_error(
@@ -147,7 +147,7 @@ class CustomerCommands:
 
             self.logger.exception(
                 "Failed to list customers: %s",
-                exc,
+                str(exc),
             )
 
             self.menu_renderer.display_error(
@@ -191,7 +191,7 @@ class CustomerCommands:
 
             self.logger.exception(
                 "Failed to update customer: %s",
-                exc,
+                str(exc),
             )
 
             self.menu_renderer.display_error(
@@ -233,7 +233,7 @@ class CustomerCommands:
 
             self.logger.exception(
                 "Failed to delete customer: %s",
-                exc,
+                str(exc),
             )
 
             self.menu_renderer.display_error(

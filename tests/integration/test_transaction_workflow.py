@@ -11,8 +11,8 @@ from exceptions.banking_exceptions import (
 from models.savings_account import SavingsAccount
 from models.transaction import Transaction
 from models.value_objects.money import Money
+from tests.integration.conftest import make_customer, make_transaction
 from utils.constants import TransactionType
-from tests.integration.conftest import make_customer
 
 
 def setup_account(customer_service, account_service):
@@ -25,18 +25,6 @@ def setup_account(customer_service, account_service):
             interest_rate=Decimal("0.025"),
             minimum_balance=Money("0"),
         )
-    )
-
-
-def make_transaction(number="TXN001", amount="250"):
-    return Transaction(
-        transaction_number=number,
-        transaction_type=TransactionType.DEPOSIT,
-        amount=Money(amount),
-        source_account=None,
-        destination_account="SAV001",
-        initiated_by="integration-test",
-        description="Integration test deposit",
     )
 
 
@@ -75,6 +63,7 @@ def test_customer_transactions(customer_service, account_service, transaction_se
     transaction_service.record_transaction(make_transaction())
     transactions = transaction_service.customer_transactions("CUST001")
     assert len(transactions) == 1
+    assert transactions[0].customer_number == "CUST001"
 
 
 def test_transaction_statistics(customer_service, account_service, transaction_service):
@@ -119,7 +108,13 @@ def test_unknown_account(transaction_service):
 
 
 def test_invalid_transaction(transaction_service):
-    invalid = make_transaction()
-    invalid._amount = Money("-100")
     with pytest.raises(ValidationError):
-        transaction_service.record_transaction(invalid)
+        Transaction(
+            transaction_number="",
+            transaction_type=TransactionType.DEPOSIT,
+            amount=Money("100"),
+            source_account=None,
+            destination_account="SAV001",
+            initiated_by="integration-test",
+            description="Invalid transaction",
+        )

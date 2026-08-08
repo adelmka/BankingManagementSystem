@@ -1,520 +1,248 @@
 """
-============================================================
 End-to-End Tests
 
 Realistic Daily Banking Operations
 
-These tests simulate a complete banking day.
-
-No mocks are used.
-============================================================
+These tests exercise the real application services and persistence
+repositories through realistic banking workflows. No mocks are used.
 """
 
-import pytest
+from datetime import date
+from decimal import Decimal
 
-# ============================================================
-# Customer Creation
-# ============================================================
+from application.bootstrap import Bootstrap
+from repositories.account_repository import AccountRepository
+from repositories.customer_repository import CustomerRepository
 
-def create_customer(
+from models.current_account import CurrentAccount
+from models.savings_account import SavingsAccount
+from models.value_objects.address import Address
+from models.value_objects.money import Money
 
-    customer_service,
+from utils.constants import Gender, CustomerStatus
 
-    customer_number,
 
-):
+def create_customer(customer_service, customer_number: str):
+    """Create and register a complete customer through the service layer."""
 
-    return customer_service.create_customer(
-
-        customer_id=customer_number,
-
-        first_name="John",
-
-        last_name="Smith",
-
-        email=f"{customer_number.lower()}@bank.com",
-
-        phone="+966501111111",
-
+    customer = customer_service.register_customer(
+        __import__("models.customer", fromlist=["Customer"]).Customer(
+            customer_id=customer_number,
+            first_name="John",
+            last_name="Smith",
+            date_of_birth=date(1990, 1, 15),
+            gender=Gender.MALE,
+            national_id=f"NID{customer_number}",
+            email=f"{customer_number.lower()}@bank.com",
+            phone_number="+966501111111",
+            address=Address(
+                address_line_1="123 Main Street",
+                address_line_2="",
+                city="Riyadh",
+                state_or_province="Riyadh",
+                postal_code="12345",
+                country="Saudi Arabia",
+            ),
+            middle_name="",
+            customer_status=CustomerStatus.ACTIVE,
+            registration_date=date.today(),
+            kyc_completed=True,
+        )
     )
 
-# ============================================================
-# Morning Opening
-# ============================================================
+    return customer
 
-def test_morning_opening(
 
-    customer_service,
-
+def open_savings_account(
     account_service,
-
+    customer_number: str,
+    account_number: str,
+    opening_balance: str,
 ):
+    """Open a savings account through the real account service."""
+
+    account = SavingsAccount(
+        account_number=account_number,
+        customer_id=customer_number,
+        opening_balance=Money(opening_balance),
+        interest_rate=Decimal("0.025"),
+        minimum_balance=Money("0"),
+    )
+
+    return account_service.open_account(account)
+
+
+def open_current_account(
+    account_service,
+    customer_number: str,
+    account_number: str,
+    opening_balance: str,
+):
+    """Open a current account through the real account service."""
+
+    account = CurrentAccount(
+        account_number=account_number,
+        customer_id=customer_number,
+        opening_balance=Money(opening_balance),
+        overdraft_limit=Money("0"),
+        maintenance_fee=Money("0"),
+        overdraft_fee=Money("0"),
+    )
+
+    return account_service.open_account(account)
+
+
+def test_morning_opening(customer_service, account_service):
+    """Open 20 customers and savings accounts for the morning opening."""
 
     for i in range(20):
-
         customer_id = f"CUST{i:03}"
-
         account_number = f"SAV{i:03}"
 
-        create_customer(
-
-            customer_service,
-
+        create_customer(customer_service, customer_id)
+        open_savings_account(
+            account_service,
             customer_id,
-
-        )
-
-        account_service.open_savings_account(
-
-            customer_id,
-
             account_number,
-
-            1000,
-
+            "1000",
         )
 
     for i in range(20):
-
-        account = account_service.find_account(
-
-            f"SAV{i:03}"
-
-        )
-
+        account = account_service.get_account(f"SAV{i:03}")
         assert account.account_number == f"SAV{i:03}"
+        assert account.balance.amount == Decimal("1000.00")
 
-# ============================================================
-# Morning Deposits
-# ============================================================
 
-def test_morning_deposits(
+def test_morning_deposits(customer_service, account_service):
+    """Process 25 deposits of 100 and verify the resulting balance."""
 
-    customer_service,
-
-    account_service,
-
-):
-
-    create_customer(
-
-        customer_service,
-
-        "CUST001",
-
-    )
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        1000,
-
-    )
+    create_customer(customer_service, "CUST001")
+    open_savings_account(account_service, "CUST001", "SAV001", "1000")
 
     for _ in range(25):
+        account_service.deposit("SAV001", Money("100"))
 
-        account_service.deposit(
+    assert account_service.balance("SAV001").amount == Decimal("3500.00")
 
-            "SAV001",
 
-            100,
+def test_afternoon_withdrawals(customer_service, account_service):
+    """Process 20 withdrawals of 100 and verify the resulting balance."""
 
-        )
-
-    assert (
-
-        account_service.get_balance(
-
-            "SAV001"
-
-        )
-
-        == 3500
-
-    )
-
-# ============================================================
-# Afternoon Withdrawals
-# ============================================================
-
-def test_afternoon_withdrawals(
-
-    customer_service,
-
-    account_service,
-
-):
-
-    create_customer(
-
-        customer_service,
-
-        "CUST001",
-
-    )
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        5000,
-
-    )
+    create_customer(customer_service, "CUST001")
+    open_savings_account(account_service, "CUST001", "SAV001", "5000")
 
     for _ in range(20):
+        account_service.withdraw("SAV001", Money("100"))
 
-        account_service.withdraw(
+    assert account_service.balance("SAV001").amount == Decimal("3000.00")
 
-            "SAV001",
 
-            100,
+def test_transfer_session(customer_service, account_service):
+    """Transfer 100 ten times from savings to current."""
 
-        )
-
-    assert (
-
-        account_service.get_balance(
-
-            "SAV001"
-
-        )
-
-        == 3000
-
-    )
-
-# ============================================================
-# Transfers
-# ============================================================
-
-def test_transfer_session(
-
-    customer_service,
-
-    account_service,
-
-):
-
-    create_customer(
-
-        customer_service,
-
-        "CUST001",
-
-    )
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        5000,
-
-    )
-
-    account_service.open_current_account(
-
-        "CUST001",
-
-        "CUR001",
-
-        1000,
-
-    )
+    create_customer(customer_service, "CUST001")
+    open_savings_account(account_service, "CUST001", "SAV001", "5000")
+    open_current_account(account_service, "CUST001", "CUR001", "1000")
 
     for _ in range(10):
-
         account_service.transfer(
-
             "SAV001",
-
             "CUR001",
-
-            100,
-
+            Money("100"),
         )
 
-    assert (
+    assert account_service.balance("SAV001").amount == Decimal("4000.00")
+    assert account_service.balance("CUR001").amount == Decimal("2000.00")
 
-        account_service.get_balance(
 
-            "SAV001"
-
-        )
-
-        == 4000
-
-    )
-
-    assert (
-
-        account_service.get_balance(
-
-            "CUR001"
-
-        )
-
-        == 2000
-
-    )
-
-# ============================================================
-# Mixed Activity
-# ============================================================
-
-def test_mixed_customer_activity(
-
-    customer_service,
-
-    account_service,
-
-):
+def test_mixed_customer_activity(customer_service, account_service):
+    """Run mixed deposit/withdrawal activity for ten customers."""
 
     for i in range(10):
-
         customer_id = f"CUST{i:03}"
-
         account_number = f"SAV{i:03}"
 
-        create_customer(
-
-            customer_service,
-
+        create_customer(customer_service, customer_id)
+        open_savings_account(
+            account_service,
             customer_id,
-
-        )
-
-        account_service.open_savings_account(
-
-            customer_id,
-
             account_number,
-
-            1000,
-
+            "1000",
         )
 
     for i in range(10):
-
-        account_service.deposit(
-
-            f"SAV{i:03}",
-
-            200,
-
-        )
-
-        account_service.withdraw(
-
-            f"SAV{i:03}",
-
-            50,
-
-        )
+        account_service.deposit(f"SAV{i:03}", Money("200"))
+        account_service.withdraw(f"SAV{i:03}", Money("50"))
 
     for i in range(10):
-
         assert (
-
-            account_service.get_balance(
-
-                f"SAV{i:03}"
-
-            )
-
-            == 1150
-
+            account_service.balance(f"SAV{i:03}").amount
+            == Decimal("1150.00")
         )
 
-# ============================================================
-# End-of-Day Verification
-# ============================================================
 
-def test_end_of_day_balances(
+def test_end_of_day_balances(customer_service, account_service):
+    """Verify the expected balance after a sequence of daily operations."""
 
-    customer_service,
+    create_customer(customer_service, "CUST001")
+    open_savings_account(account_service, "CUST001", "SAV001", "1000")
 
-    account_service,
+    account_service.deposit("SAV001", Money("500"))
+    account_service.withdraw("SAV001", Money("250"))
 
-):
+    assert account_service.balance("SAV001").amount == Decimal("1250.00")
 
-    create_customer(
-
-        customer_service,
-
-        "CUST001",
-
-    )
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        1000,
-
-    )
-
-    account_service.deposit(
-
-        "SAV001",
-
-        500,
-
-    )
-
-    account_service.withdraw(
-
-        "SAV001",
-
-        250,
-
-    )
-
-    balance = account_service.get_balance(
-
-        "SAV001"
-
-    )
-
-    assert balance == 1250
-
-# ============================================================
-# End-of-Day Restart
-# ============================================================
 
 def test_end_of_day_restart(
-
     customer_service,
-
     account_service,
-
-    reload_customer_repository,
-
-    reload_account_repository,
-
+    test_config,
+    monkeypatch,
 ):
+    """Verify that customer and account data survive application restart."""
 
-    create_customer(
+    create_customer(customer_service, "CUST001")
+    open_savings_account(account_service, "CUST001", "SAV001", "1000")
+    account_service.deposit("SAV001", Money("500"))
 
-        customer_service,
-
-        "CUST001",
-
+    monkeypatch.setattr(
+        CustomerRepository,
+        "CSV_FILE",
+        test_config.CUSTOMERS_FILE,
+    )
+    monkeypatch.setattr(
+        AccountRepository,
+        "CSV_FILE",
+        test_config.ACCOUNTS_FILE,
     )
 
-    account_service.open_savings_account(
+    restarted_application = Bootstrap(
+        config=test_config
+    ).initialize()
 
-        "CUST001",
-
-        "SAV001",
-
-        1000,
-
-    )
-
-    account_service.deposit(
-
-        "SAV001",
-
-        500,
-
-    )
-
-    customer_repo = reload_customer_repository()
-
-    account_repo = reload_account_repository()
-
-    customer = customer_repo.find_by_id(
-
+    customer = restarted_application._container.customer_repository.find_by_customer_number(
         "CUST001"
-
     )
-
-    account = account_repo.find_by_account_number(
-
+    account = restarted_application._container.account_repository.find_by_account_number(
         "SAV001"
-
     )
 
+    assert customer is not None
     assert customer.customer_id == "CUST001"
-
+    assert account is not None
     assert account.account_number == "SAV001"
+    assert account.balance.amount == Decimal("1500.00")
 
-# ============================================================
-# Complete Banking Day
-# ============================================================
 
-def test_complete_banking_day(
+def test_complete_banking_day(customer_service, account_service):
+    """Execute the complete planned banking-day sequence."""
 
-    customer_service,
+    create_customer(customer_service, "CUST001")
+    open_savings_account(account_service, "CUST001", "SAV001", "1000")
 
-    account_service,
+    account_service.deposit("SAV001", Money("500"))
+    account_service.withdraw("SAV001", Money("100"))
+    account_service.deposit("SAV001", Money("250"))
+    account_service.withdraw("SAV001", Money("50"))
 
-):
-
-    create_customer(
-
-        customer_service,
-
-        "CUST001",
-
-    )
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        1000,
-
-    )
-
-    account_service.deposit(
-
-        "SAV001",
-
-        500,
-
-    )
-
-    account_service.withdraw(
-
-        "SAV001",
-
-        100,
-
-    )
-
-    account_service.deposit(
-
-        "SAV001",
-
-        250,
-
-    )
-
-    account_service.withdraw(
-
-        "SAV001",
-
-        50,
-
-    )
-
-    balance = account_service.get_balance(
-
-        "SAV001"
-
-    )
-
-    assert balance == 1600
-
+    assert account_service.balance("SAV001").amount == Decimal("1600.00")

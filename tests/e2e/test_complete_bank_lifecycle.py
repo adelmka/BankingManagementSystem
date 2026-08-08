@@ -224,9 +224,8 @@ def test_complete_savings_account_lifecycle(
     account.close_account()
     e2e_repositories["account"].save_account(account)
 
-    # Closed accounts are removed from the active-account repository
-    # view by the current persistence contract.
-    assert account_service.get_account("E2ESAV001") is None
+    # Closed accounts are excluded from the active-account lookup.
+    assert e2e_repositories["account"].find_by_account_number("E2ESAV001") is None
 
 
 # ============================================================
@@ -418,8 +417,7 @@ def test_complete_bank_lifecycle(
     account.close_account()
     e2e_repositories["account"].save_account(account)
 
-    # Closed accounts are removed from the active-account repository
-    # view by the current persistence contract.
-    assert account_service.get_account("E2ESAV001") is None
+    # Closed accounts are excluded from the active-account lookup.
+    assert e2e_repositories["account"].find_by_account_number("E2ESAV001") is None
     assert customer_service.archive_customer("E2ELC001") is True
     assert customer_service.find_customer("E2ELC001") is None

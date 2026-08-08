@@ -113,7 +113,7 @@ class DependencyContainer:
         #
 
         self._customer_service = CustomerService(
-            customer_repository=self._customer_repository
+            repository=self._customer_repository
         )
 
         self._account_service = AccountService(

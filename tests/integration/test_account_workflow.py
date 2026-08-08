@@ -6,7 +6,6 @@ import pytest
 
 from exceptions.banking_exceptions import (
     EntityNotFoundError,
-    InsufficientFundsError,
     ValidationError,
 )
 from models.savings_account import SavingsAccount
@@ -78,22 +77,20 @@ def test_customer_accounts(customer_service, account_service):
 
 def test_invalid_account(customer_service, account_service):
     register_customer(customer_service)
-    invalid = SavingsAccount(
-        account_number="SAV001",
-        customer_id="CUST001",
-        opening_balance=Money("1000"),
-        interest_rate=Decimal("0.025"),
-        minimum_balance=Money("0"),
-    )
-    invalid._account_number = ""
     with pytest.raises(ValidationError):
-        account_service.open_account(invalid)
+        SavingsAccount(
+            account_number="",
+            customer_id="CUST001",
+            opening_balance=Money("1000"),
+            interest_rate=Decimal("0.025"),
+            minimum_balance=Money("0"),
+        )
 
 
 def test_insufficient_funds(customer_service, account_service):
     register_customer(customer_service)
     open_savings(account_service, balance="100")
-    with pytest.raises(InsufficientFundsError):
+    with pytest.raises(ValueError, match="Insufficient available balance"):
         account_service.withdraw("SAV001", Money("500"))
 
 

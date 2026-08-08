@@ -1,307 +1,153 @@
-"""
-============================================================
-Integration Test Fixtures
+"""Integration-test fixtures for the current BMS service contracts."""
 
-These fixtures provide real repositories and services
-backed by temporary CSV files.
-
-No mocks are used.
-
-Each test receives a completely isolated banking system.
-============================================================
-"""
-
-from pathlib import Path
+from datetime import date
 
 import pytest
 
-from repositories.customer_repository import CustomerRepository
+from models.customer import Customer
+from models.savings_account import SavingsAccount
+from models.value_objects.address import Address
+from models.value_objects.money import Money
 from repositories.account_repository import AccountRepository
+from repositories.customer_repository import CustomerRepository
 from repositories.transaction_repository import TransactionRepository
-
-from services.customer_service import CustomerService
 from services.account_service import AccountService
+from services.customer_service import CustomerService
 from services.transaction_service import TransactionService
-
-# ============================================================
-# Temporary Data Directory
-# ============================================================
-
-@pytest.fixture
-def data_directory(tmp_path):
-
-    """
-    Creates a temporary data directory for each test.
-
-    pytest automatically removes it afterwards.
-    """
-
-    data = tmp_path / "data"
-
-    data.mkdir()
-
-    return data
-
-# ============================================================
-# CSV Files
-# ============================================================
-
-@pytest.fixture
-def customer_csv(data_directory):
-
-    return data_directory / "customers.csv"
+from utils.constants import CustomerStatus, Gender
 
 
 @pytest.fixture
-def account_csv(data_directory):
+def e2e_repositories(tmp_path, monkeypatch):
+    """Create isolated real repositories backed by temporary CSV files."""
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
 
-    return data_directory / "accounts.csv"
+    customer_file = data_dir / "customers.csv"
+    account_file = data_dir / "accounts.csv"
+    transaction_file = data_dir / "transactions.csv"
 
-
-@pytest.fixture
-def transaction_csv(data_directory):
-
-    return data_directory / "transactions.csv"
-
-# ============================================================
-# Customer Repository
-# ============================================================
-
-@pytest.fixture
-def customer_repository(customer_csv):
-
-    repository = CustomerRepository(
-
-        file_path=customer_csv
-
-    )
-
-    repository.load()
-
-    return repository
-
-# ============================================================
-# Account Repository
-# ============================================================
-
-@pytest.fixture
-def account_repository(account_csv):
-
-    repository = AccountRepository(
-
-        file_path=account_csv
-
-    )
-
-    repository.load()
-
-    return repository
-
-# ============================================================
-# Transaction Repository
-# ============================================================
-
-@pytest.fixture
-def transaction_repository(transaction_csv):
-
-    repository = TransactionRepository(
-
-        file_path=transaction_csv
-
-    )
-
-    repository.load()
-
-    return repository
-
-# ============================================================
-# Customer Service
-# ============================================================
-
-@pytest.fixture
-def customer_service(
-
-    customer_repository,
-
-):
-
-    return CustomerService(
-
-        customer_repository,
-
-    )
-
-# ============================================================
-# Account Service
-# ============================================================
-
-@pytest.fixture
-def account_service(
-
-    account_repository,
-
-    customer_repository,
-
-    transaction_repository,
-
-):
-
-    return AccountService(
-
-        account_repository,
-
-        customer_repository,
-
-        transaction_repository,
-
-    )
-
-# ============================================================
-# Transaction Service
-# ============================================================
-
-@pytest.fixture
-def transaction_service(
-
-    transaction_repository,
-
-    account_repository,
-
-):
-
-    return TransactionService(
-
-        transaction_repository,
-
-        account_repository,
-
-    )
-
-# ============================================================
-# Banking System
-# ============================================================
-
-@pytest.fixture
-def banking_system(
-
-    customer_service,
-
-    account_service,
-
-    transaction_service,
-
-):
+    monkeypatch.setattr(CustomerRepository, "CSV_FILE", customer_file)
+    monkeypatch.setattr(AccountRepository, "CSV_FILE", account_file)
+    monkeypatch.setattr(TransactionRepository, "CSV_FILE", transaction_file)
 
     return {
-
-        "customer_service": customer_service,
-
-        "account_service": account_service,
-
-        "transaction_service": transaction_service,
-
+        "customer": CustomerRepository(),
+        "account": AccountRepository(),
+        "transaction": TransactionRepository(),
     }
 
-# ============================================================
-# Sample Customer
-# ============================================================
 
 @pytest.fixture
-def sample_customer(
+def customer_repository(e2e_repositories):
+    return e2e_repositories["customer"]
 
-    customer_service,
 
-):
+@pytest.fixture
+def account_repository(e2e_repositories):
+    return e2e_repositories["account"]
 
-    return customer_service.create_customer(
 
-        customer_id="CUST001",
+@pytest.fixture
+def transaction_repository(e2e_repositories):
+    return e2e_repositories["transaction"]
 
+
+@pytest.fixture
+def customer_service(customer_repository):
+    return CustomerService(customer_repository)
+
+
+@pytest.fixture
+def account_service(e2e_repositories):
+    return AccountService(
+        account_repository=e2e_repositories["account"],
+        customer_repository=e2e_repositories["customer"],
+        transaction_repository=e2e_repositories["transaction"],
+    )
+
+
+@pytest.fixture
+def transaction_service(e2e_repositories):
+    return TransactionService(
+        transaction_repository=e2e_repositories["transaction"],
+        account_repository=e2e_repositories["account"],
+    )
+
+
+@pytest.fixture
+def banking_system(customer_service, account_service, transaction_service):
+    return {
+        "customer_service": customer_service,
+        "account_service": account_service,
+        "transaction_service": transaction_service,
+    }
+
+
+def make_customer(customer_id="CUST001", index=1):
+    return Customer(
+        customer_id=customer_id,
         first_name="John",
-
         last_name="Smith",
-
-        email="john@test.com",
-
-        phone="+966501111111",
-
+        date_of_birth=date(1990, 1, 15),
+        gender=Gender.MALE,
+        national_id=f"700000000{index:03}",
+        email=f"integration-{index}@bank.com",
+        phone_number=f"+966501000{index:03}",
+        address=Address(
+            address_line_1="123 Main Street",
+            address_line_2="",
+            city="Riyadh",
+            state_or_province="Riyadh",
+            postal_code="12345",
+            country="Saudi Arabia",
+        ),
+        middle_name="",
+        customer_status=CustomerStatus.ACTIVE,
+        registration_date=date.today(),
+        kyc_completed=True,
     )
 
-# ============================================================
-# Sample Savings Account
-# ============================================================
 
 @pytest.fixture
-def sample_account(
+def sample_customer(customer_service):
+    return customer_service.register_customer(make_customer())
 
-    account_service,
 
-    sample_customer,
-
-):
-
-    return account_service.open_savings_account(
-
-        customer_id="CUST001",
-
+@pytest.fixture
+def sample_account(account_service, sample_customer):
+    account = SavingsAccount(
         account_number="SAV001",
-
-        opening_balance=1000,
-
+        customer_id="CUST001",
+        opening_balance=Money("1000"),
+        interest_rate=0.025,
+        minimum_balance=Money("0"),
     )
+    return account_service.open_account(account)
 
-# ============================================================
-# Reload Repositories
-# ============================================================
 
 @pytest.fixture
-def reload_customer_repository(customer_csv):
-
+def reload_customer_repository(customer_repository):
     def factory():
-
-        repo = CustomerRepository(
-
-            file_path=customer_csv
-
-        )
-
+        repo = CustomerRepository()
         repo.load()
-
         return repo
-
     return factory
+
 
 @pytest.fixture
-def reload_account_repository(account_csv):
-
+def reload_account_repository(account_repository):
     def factory():
-
-        repo = AccountRepository(
-
-            file_path=account_csv
-
-        )
-
+        repo = AccountRepository()
         repo.load()
-
         return repo
-
     return factory
+
 
 @pytest.fixture
-def reload_transaction_repository(transaction_csv):
-
+def reload_transaction_repository(transaction_repository):
     def factory():
-
-        repo = TransactionRepository(
-
-            file_path=transaction_csv
-
-        )
-
+        repo = TransactionRepository()
         repo.load()
-
         return repo
-
     return factory
-

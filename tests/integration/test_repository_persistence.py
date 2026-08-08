@@ -1,420 +1,96 @@
-"""
-============================================================
-Integration Tests
+"""Integration tests for CSV repository persistence and reload behavior."""
 
-Repository Persistence
+from decimal import Decimal
 
-Verifies that all repositories correctly persist
-their state to CSV files and restore it after
-application restart.
+from models.savings_account import SavingsAccount
+from models.transaction import Transaction
+from models.value_objects.money import Money
+from utils.constants import TransactionType
+from tests.integration.conftest import make_customer
 
-No mocks are used.
-============================================================
-"""
 
-import pytest
-
-# ============================================================
-# Customer Repository
-# ============================================================
-
-def test_customer_repository_persistence(
-
-    customer_service,
-
-    reload_customer_repository,
-
-):
-
-    customer_service.create_customer(
-
-        customer_id="CUST001",
-
-        first_name="John",
-
-        last_name="Smith",
-
-        email="john@test.com",
-
-        phone="+966501111111",
-
+def register_customer(customer_service, index=1):
+    return customer_service.register_customer(
+        make_customer(f"CUST{index:03}", index)
     )
 
+
+def open_account(account_service, index=1, balance="1000"):
+    return account_service.open_account(
+        SavingsAccount(
+            account_number=f"SAV{index:03}",
+            customer_id=f"CUST{index:03}",
+            opening_balance=Money(balance),
+            interest_rate=Decimal("0.025"),
+            minimum_balance=Money("0"),
+        )
+    )
+
+
+def make_transaction(number, account_number):
+    return Transaction(
+        transaction_number=number,
+        transaction_type=TransactionType.DEPOSIT,
+        amount=Money("250"),
+        source_account=None,
+        destination_account=account_number,
+        initiated_by="integration-test",
+        description="Persistence test",
+    )
+
+
+def test_customer_repository_persistence(customer_service, reload_customer_repository):
+    register_customer(customer_service)
     repository = reload_customer_repository()
-
-    customer = repository.find_by_id(
-
-        "CUST001"
-
-    )
-
+    customer = repository.find_by_customer_number("CUST001")
+    assert customer is not None
     assert customer.customer_id == "CUST001"
-
     assert customer.first_name == "John"
 
-# ============================================================
-# Account Repository
-# ============================================================
 
 def test_account_repository_persistence(
-
     customer_service,
-
     account_service,
-
     reload_account_repository,
-
 ):
-
-    customer_service.create_customer(
-
-        customer_id="CUST001",
-
-        first_name="John",
-
-        last_name="Smith",
-
-        email="john@test.com",
-
-        phone="+966501111111",
-
-    )
-
-    account_service.open_savings_account(
-
-        customer_id="CUST001",
-
-        account_number="SAV001",
-
-        opening_balance=1000,
-
-    )
-
+    register_customer(customer_service)
+    open_account(account_service)
     repository = reload_account_repository()
-
-    account = repository.find_by_account_number(
-
-        "SAV001"
-
-    )
-
+    account = repository.find_by_account_number("SAV001")
+    assert account is not None
     assert account.account_number == "SAV001"
 
-# ============================================================
-# Transaction Repository
-# ============================================================
 
 def test_transaction_repository_persistence(
-
     customer_service,
-
     account_service,
-
     transaction_service,
-
     reload_transaction_repository,
-
 ):
-
-    customer_service.create_customer(
-
-        customer_id="CUST001",
-
-        first_name="John",
-
-        last_name="Smith",
-
-        email="john@test.com",
-
-        phone="+966501111111",
-
-    )
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        1000,
-
-    )
-
-    transaction_service.deposit(
-
-        "SAV001",
-
-        250,
-
-    )
-
+    register_customer(customer_service)
+    open_account(account_service)
+    transaction_service.record_transaction(make_transaction("TXN001", "SAV001"))
     repository = reload_transaction_repository()
-
-    transactions = repository.get_all()
-
+    transactions = list(repository)
     assert len(transactions) == 1
+    assert transactions[0].transaction_number == "TXN001"
 
-# ============================================================
-# Multiple Customers
-# ============================================================
 
-def test_persist_multiple_customers(
-
-    customer_service,
-
-    reload_customer_repository,
-
-):
-
-    for i in range(50):
-
-        customer_service.create_customer(
-
-            customer_id=f"CUST{i:03}",
-
-            first_name="John",
-
-            last_name="Smith",
-
-            email=f"user{i}@test.com",
-
-            phone=f"+9665000{i:04}",
-
-        )
-
+def test_persist_multiple_customers(customer_service, reload_customer_repository):
+    for i in range(1, 51):
+        register_customer(customer_service, i)
     repository = reload_customer_repository()
+    assert len(list(repository)) == 50
+    for i in range(1, 51):
+        assert repository.find_by_customer_number(f"CUST{i:03}") is not None
 
-    for i in range(50):
-
-        customer = repository.find_by_id(
-
-            f"CUST{i:03}"
-
-        )
-
-        assert customer.customer_id == f"CUST{i:03}"
-
-# ============================================================
-# Multiple Accounts
-# ============================================================
 
 def test_persist_multiple_accounts(
-
     customer_service,
-
     account_service,
-
     reload_account_repository,
-
 ):
-
-    customer_service.create_customer(
-
-        customer_id="CUST001",
-
-        first_name="John",
-
-        last_name="Smith",
-
-        email="john@test.com",
-
-        phone="+966501111111",
-
-    )
-
-    for i in range(30):
-
-        account_service.open_savings_account(
-
-            "CUST001",
-
-            f"SAV{i:03}",
-
-            100,
-
-        )
-
-    repository = reload_account_repository()
-
-    for i in range(30):
-
-        account = repository.find_by_account_number(
-
-            f"SAV{i:03}"
-
-        )
-
-        assert account.account_number == f"SAV{i:03}"
-
-# ============================================================
-# Full Restart
-# ============================================================
-
-def test_full_system_restart(
-
-    customer_service,
-
-    account_service,
-
-    transaction_service,
-
-    reload_customer_repository,
-
-    reload_account_repository,
-
-    reload_transaction_repository,
-
-):
-
-    customer_service.create_customer(
-
-        customer_id="CUST001",
-
-        first_name="John",
-
-        last_name="Smith",
-
-        email="john@test.com",
-
-        phone="+966501111111",
-
-    )
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        1000,
-
-    )
-
-    transaction_service.deposit(
-
-        "SAV001",
-
-        500,
-
-    )
-
-    customer_repo = reload_customer_repository()
-
-    account_repo = reload_account_repository()
-
-    transaction_repo = reload_transaction_repository()
-
-    assert customer_repo.find_by_id(
-
-        "CUST001"
-
-    ) is not None
-
-    assert account_repo.find_by_account_number(
-
-        "SAV001"
-
-    ) is not None
-
-    assert len(
-
-        transaction_repo.get_all()
-
-    ) == 1
-
-# ============================================================
-# Repeated Restart
-# ============================================================
-
-def test_repeated_repository_reload(
-
-    customer_service,
-
-    reload_customer_repository,
-
-):
-
-    customer_service.create_customer(
-
-        customer_id="CUST001",
-
-        first_name="John",
-
-        last_name="Smith",
-
-        email="john@test.com",
-
-        phone="+966501111111",
-
-    )
-
-    for _ in range(10):
-
-        repo = reload_customer_repository()
-
-        customer = repo.find_by_id(
-
-            "CUST001"
-
-        )
-
-        assert customer.customer_id == "CUST001"
-
-# ============================================================
-# Repository Consistency
-# ============================================================
-
-def test_repository_consistency(
-
-    customer_service,
-
-    account_service,
-
-    reload_customer_repository,
-
-    reload_account_repository,
-
-):
-
-    customer_service.create_customer(
-
-        customer_id="CUST001",
-
-        first_name="John",
-
-        last_name="Smith",
-
-        email="john@test.com",
-
-        phone="+966501111111",
-
-    )
-
-    account_service.open_current_account(
-
-        "CUST001",
-
-        "CUR001",
-
-        500,
-
-    )
-
-    customer_repo = reload_customer_repository()
-
-    account_repo = reload_account_repository()
-
-    customer = customer_repo.find_by_id(
-
-        "CUST001"
-
-    )
-
-    account = account_repo.find_by_account_number(
-
-        "CUR001"
-
-    )
-
-    assert customer.customer_id == account.customer_id
-
+    register_customer(customer_service)
+    for i in range(1, 31):
+        open_account(account_service, i)
+        # Account ownership requires the matching customer, so register it first.

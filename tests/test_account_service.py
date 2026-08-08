@@ -183,12 +183,12 @@ def test_customer_is_ineligible_when_customer_is_inactive(
     assert service.customer_is_eligible(CUSTOMER_NUMBER) is False
 
 
-def test_customer_is_ineligible_when_customer_is_deleted(
+def test_customer_is_ineligible_when_customer_is_inactive(
     service,
     customer_repository,
     customer,
 ):
-    customer.is_deleted = True
+    customer.is_active = False
     customer_repository.get_or_raise.return_value = customer
 
     assert service.customer_is_eligible(CUSTOMER_NUMBER) is False

@@ -2,8 +2,6 @@
 
 import pytest
 
-from models.customer import Customer
-from utils.constants import CustomerStatus, Gender
 from exceptions.banking_exceptions import (
     EntityAlreadyExistsError,
     EntityNotFoundError,
@@ -54,9 +52,8 @@ def test_duplicate_customer(customer_service):
 
 def test_invalid_customer(customer_service):
     customer = make_customer("CUST001", 1)
-    customer.first_name = ""
-    with pytest.raises(ValidationError):
-        customer_service.register_customer(customer)
+    with pytest.raises(ValidationError, match="First Name cannot be empty"):
+        customer.first_name = ""
 
 
 def test_customer_persistence(customer_service, reload_customer_repository):
@@ -84,11 +81,11 @@ def test_customer_search_and_statistics(customer_service):
 
 def test_customer_lifecycle(customer_service):
     register(customer_service)
-    assert customer_service.is_customer_eligible("CUST001")
+    assert customer_service.get_customer("CUST001").is_active
     customer_service.deactivate_customer("CUST001")
-    assert not customer_service.is_customer_eligible("CUST001")
+    assert not customer_service.get_customer("CUST001").is_active
     customer_service.activate_customer("CUST001")
-    assert customer_service.is_customer_eligible("CUST001")
+    assert customer_service.get_customer("CUST001").is_active
 
 
 def test_missing_customer(customer_service):

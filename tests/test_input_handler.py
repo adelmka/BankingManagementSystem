@@ -124,10 +124,10 @@ class TestInputHandler:
             assert handler.read_menu_selection({"1", "2", "3"}) == "2"
         renderer.error.assert_called_once_with("Invalid menu selection.")
 
-    def test_read_menu_selection_requires_exact_choice(self, handler, renderer):
-        with patch("builtins.input", side_effect=[" 2 ", "2"]):
+    def test_read_menu_selection_strips_input(self, handler, renderer):
+        with patch("builtins.input", return_value=" 2 "):
             assert handler.read_menu_selection({"2"}) == "2"
-        renderer.error.assert_called_once_with("Invalid menu selection.")
+        renderer.error.assert_not_called()
 
     def test_pause_waits_for_enter(self, handler):
         with patch("builtins.input", return_value="") as mocked_input:

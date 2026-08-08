@@ -11,466 +11,379 @@ No mocks are used.
 ============================================================
 """
 
+from datetime import date
+from decimal import Decimal
+
 import pytest
 
-from exceptions.banking_exceptions import (
-    AccountNotFoundError,
-    CustomerNotFoundError,
-)
+from models.current_account import CurrentAccount
+from models.customer import Customer
+from models.savings_account import SavingsAccount
+from models.value_objects.address import Address
+from models.value_objects.money import Money
+from repositories.account_repository import AccountRepository
+from repositories.customer_repository import CustomerRepository
+from repositories.transaction_repository import TransactionRepository
+from services.account_service import AccountService
+from services.customer_service import CustomerService
+from services.transaction_service import TransactionService
+from utils.constants import CustomerStatus, Gender
+
 
 # ============================================================
-# Helper
+# Test-data and isolation helpers
 # ============================================================
 
-def create_customer(customer_service):
 
-    return customer_service.create_customer(
+@pytest.fixture
+def e2e_repositories(tmp_path, monkeypatch):
+    """Build all repositories against private CSV files for this test."""
 
-        customer_id="CUST001",
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
 
+    customer_file = data_dir / "customers.csv"
+    account_file = data_dir / "accounts.csv"
+    transaction_file = data_dir / "transactions.csv"
+
+    monkeypatch.setattr(CustomerRepository, "CSV_FILE", customer_file)
+    monkeypatch.setattr(AccountRepository, "CSV_FILE", account_file)
+    monkeypatch.setattr(TransactionRepository, "CSV_FILE", transaction_file)
+
+    return {
+        "customer": CustomerRepository(),
+        "account": AccountRepository(),
+        "transaction": TransactionRepository(),
+    }
+
+
+@pytest.fixture
+def customer_service(e2e_repositories):
+    """Customer service using this test's private repository."""
+
+    return CustomerService(e2e_repositories["customer"])
+
+
+@pytest.fixture
+def account_service(e2e_repositories):
+    """Account service using this test's private repositories."""
+
+    return AccountService(
+        account_repository=e2e_repositories["account"],
+        customer_repository=e2e_repositories["customer"],
+        transaction_repository=e2e_repositories["transaction"],
+    )
+
+
+@pytest.fixture
+def transaction_service(e2e_repositories):
+    """Transaction service using this test's private repositories."""
+
+    return TransactionService(
+        transaction_repository=e2e_repositories["transaction"],
+        account_repository=e2e_repositories["account"],
+    )
+
+
+def make_customer(
+    customer_id: str = "E2ELC001",
+    national_id: str = "710000000001",
+    email: str = "e2e-lifecycle-001@bank.com",
+    phone_number: str = "+966502000001",
+) -> Customer:
+    """Build a complete customer using the current domain model."""
+
+    return Customer(
+        customer_id=customer_id,
         first_name="John",
-
         last_name="Smith",
-
-        email="john@test.com",
-
-        phone="+966501111111",
-
+        date_of_birth=date(1990, 1, 15),
+        gender=Gender.MALE,
+        national_id=national_id,
+        email=email,
+        phone_number=phone_number,
+        address=Address(
+            address_line_1="123 Main Street",
+            address_line_2="",
+            city="Riyadh",
+            state_or_province="Riyadh",
+            postal_code="12345",
+            country="Saudi Arabia",
+        ),
+        middle_name="",
+        customer_status=CustomerStatus.ACTIVE,
+        registration_date=date.today(),
+        kyc_completed=True,
     )
 
 
-# Scenario 1 — Complete Customer Lifecycle
+def register_customer(customer_service, **kwargs) -> Customer:
+    """Register a complete customer through the current service API."""
 
-# ============================================================
-# Customer Lifecycle
-# ============================================================
+    return customer_service.register_customer(make_customer(**kwargs))
 
-def test_complete_customer_lifecycle(
 
-    customer_service,
-
+def open_savings_account(
+    account_service,
+    customer_id: str,
+    account_number: str,
+    opening_balance: str,
 ):
+    """Open a savings account through the current account-service API."""
 
-    create_customer(customer_service)
-
-    customer = customer_service.find_customer(
-
-        "CUST001"
-
+    account = SavingsAccount(
+        account_number=account_number,
+        customer_id=customer_id,
+        opening_balance=Money(opening_balance),
+        interest_rate=Decimal("0.025"),
+        minimum_balance=Money("0"),
     )
 
-    assert customer.customer_id == "CUST001"
+    return account_service.open_account(account)
 
-    customer_service.update_customer(
 
-        customer_id="CUST001",
+def open_current_account(
+    account_service,
+    customer_id: str,
+    account_number: str,
+    opening_balance: str,
+):
+    """Open a current account through the current account-service API."""
 
-        first_name="Johnny",
-
-        last_name="Smith",
-
-        email="johnny@test.com",
-
-        phone="+966501111111",
-
+    account = CurrentAccount(
+        account_number=account_number,
+        customer_id=customer_id,
+        opening_balance=Money(opening_balance),
+        overdraft_limit=Money("1000"),
+        maintenance_fee=Money("10"),
+        overdraft_fee=Money("25"),
     )
 
-    customer = customer_service.find_customer(
+    return account_service.open_account(account)
 
-        "CUST001"
 
-    )
+# ============================================================
+# Scenario 1 — Complete Customer Lifecycle
+# ============================================================
 
+
+def test_complete_customer_lifecycle(customer_service):
+    """Register, update, archive, and verify a customer."""
+
+    register_customer(customer_service)
+
+    customer = customer_service.find_customer("E2ELC001")
+    assert customer is not None
+    assert customer.customer_id == "E2ELC001"
+
+    customer.first_name = "Johnny"
+    customer.email = "johnny@bank.com"
+    customer_service.update_customer(customer)
+
+    customer = customer_service.find_customer("E2ELC001")
+    assert customer is not None
     assert customer.first_name == "Johnny"
+    assert customer.email == "johnny@bank.com"
 
-    customer_service.delete_customer(
+    assert customer_service.archive_customer("E2ELC001") is True
+    assert customer_service.find_customer("E2ELC001") is None
 
-        "CUST001"
 
-    )
-
-    with pytest.raises(
-
-        CustomerNotFoundError
-
-    ):
-
-        customer_service.find_customer(
-
-            "CUST001"
-
-        )
-
+# ============================================================
 # Scenario 2 — Savings Account Lifecycle
+# ============================================================
 
-# ============================================================
-# Savings Account Lifecycle
-# ============================================================
 
 def test_complete_savings_account_lifecycle(
-
     customer_service,
-
     account_service,
-
 ):
+    """Open, fund, transact on, and close a savings account."""
 
-    create_customer(customer_service)
-
-    account_service.open_savings_account(
-
-        customer_id="CUST001",
-
-        account_number="SAV001",
-
-        opening_balance=1000,
-
+    register_customer(customer_service)
+    open_savings_account(
+        account_service,
+        "E2ELC001",
+        "E2ESAV001",
+        "1000",
     )
 
-    account_service.deposit(
+    account_service.deposit("E2ESAV001", Money("500"))
+    account_service.withdraw("E2ESAV001", Money("200"))
 
-        "SAV001",
+    account = account_service.get_account("E2ESAV001")
+    assert account.balance.amount == Decimal("1300.00")
 
-        500,
+    account_service.close_account("E2ESAV001")
+    closed_account = account_service.get_account("E2ESAV001")
+    assert not closed_account.is_active
 
-    )
 
-    account_service.withdraw(
-
-        "SAV001",
-
-        200,
-
-    )
-
-    balance = account_service.get_balance(
-
-        "SAV001"
-
-    )
-
-    assert balance == 1300
-
-    account_service.close_account(
-
-        "SAV001"
-
-    )
-
-    with pytest.raises(
-
-        AccountNotFoundError
-
-    ):
-
-        account_service.find_account(
-
-            "SAV001"
-
-        )
-
+# ============================================================
 # Scenario 3 — Transfer Between Accounts
+# ============================================================
 
-# ============================================================
-# Transfer Workflow
-# ============================================================
 
 def test_complete_transfer_workflow(
-
     customer_service,
-
     account_service,
-
 ):
+    """Transfer funds between two accounts owned by one customer."""
 
-    create_customer(customer_service)
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        1000,
-
+    register_customer(customer_service)
+    open_savings_account(
+        account_service,
+        "E2ELC001",
+        "E2ESAV001",
+        "1000",
     )
-
-    account_service.open_current_account(
-
-        "CUST001",
-
-        "CUR001",
-
-        500,
-
+    open_current_account(
+        account_service,
+        "E2ELC001",
+        "E2ECUR001",
+        "500",
     )
 
     account_service.transfer(
-
-        "SAV001",
-
-        "CUR001",
-
-        300,
-
+        "E2ESAV001",
+        "E2ECUR001",
+        Money("300"),
     )
 
     assert (
-
-        account_service.get_balance(
-
-            "SAV001"
-
-        )
-
-        == 700
-
+        account_service.get_account("E2ESAV001").balance.amount
+        == Decimal("700.00")
     )
-
     assert (
-
-        account_service.get_balance(
-
-            "CUR001"
-
-        )
-
-        == 800
-
+        account_service.get_account("E2ECUR001").balance.amount
+        == Decimal("800.00")
     )
 
+
+# ============================================================
 # Scenario 4 — Restart Application
+# ============================================================
 
-# ============================================================
-# Restart Application
-# ============================================================
 
 def test_application_restart(
-
     customer_service,
-
     account_service,
-
     transaction_service,
-
-    reload_customer_repository,
-
-    reload_account_repository,
-
-    reload_transaction_repository,
-
+    e2e_repositories,
 ):
+    """Verify customers, accounts, and transactions survive a reload."""
 
-    create_customer(customer_service)
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        1000,
-
+    register_customer(customer_service)
+    open_savings_account(
+        account_service,
+        "E2ELC001",
+        "E2ESAV001",
+        "1000",
     )
 
-    transaction_service.deposit(
+    account_service.deposit("E2ESAV001", Money("500"))
 
-        "SAV001",
+    customer_repo = CustomerRepository()
+    account_repo = AccountRepository()
+    transaction_repo = TransactionRepository()
 
-        500,
+    assert customer_repo.find_by_customer_number("E2ELC001") is not None
+    assert account_repo.find_by_account_number("E2ESAV001") is not None
+    assert len(transaction_repo.get_all()) == 1
 
+    restarted_transaction_service = TransactionService(
+        transaction_repository=transaction_repo,
+        account_repository=account_repo,
     )
+    assert restarted_transaction_service.transaction_count() == 1
+    assert transaction_service.transaction_count() == 1
 
-    customer_repo = reload_customer_repository()
 
-    account_repo = reload_account_repository()
-
-    transaction_repo = reload_transaction_repository()
-
-    assert customer_repo.find_by_id(
-
-        "CUST001"
-
-    ) is not None
-
-    assert account_repo.find_by_account_number(
-
-        "SAV001"
-
-    ) is not None
-
-    assert len(
-
-        transaction_repo.get_all()
-
-    ) == 1
-
+# ============================================================
 # Scenario 5 — Customer Owns Multiple Accounts
+# ============================================================
 
-# ============================================================
-# Multiple Accounts
-# ============================================================
 
 def test_customer_multiple_accounts(
-
     customer_service,
-
     account_service,
-
 ):
+    """Verify that one customer can own savings and current accounts."""
 
-    create_customer(customer_service)
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        1000,
-
+    register_customer(customer_service)
+    open_savings_account(
+        account_service,
+        "E2ELC001",
+        "E2ESAV001",
+        "1000",
+    )
+    open_current_account(
+        account_service,
+        "E2ELC001",
+        "E2ECUR001",
+        "500",
     )
 
-    account_service.open_current_account(
+    savings = account_service.get_account("E2ESAV001")
+    current = account_service.get_account("E2ECUR001")
 
-        "CUST001",
+    assert savings.customer_id == "E2ELC001"
+    assert current.customer_id == "E2ELC001"
+    assert len(account_service.customer_accounts("E2ELC001")) == 2
 
-        "CUR001",
 
-        500,
-
-    )
-
-    savings = account_service.find_account(
-
-        "SAV001"
-
-    )
-
-    current = account_service.find_account(
-
-        "CUR001"
-
-    )
-
-    assert savings.customer_id == "CUST001"
-
-    assert current.customer_id == "CUST001"
-
+# ============================================================
 # Scenario 6 — Long Banking Session
+# ============================================================
 
-# ============================================================
-# Long Banking Session
-# ============================================================
 
 def test_long_banking_session(
-
     customer_service,
-
     account_service,
-
 ):
+    """Execute repeated deposits and withdrawals in one session."""
 
-    create_customer(customer_service)
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        1000,
-
+    register_customer(customer_service)
+    open_savings_account(
+        account_service,
+        "E2ELC001",
+        "E2ESAV001",
+        "1000",
     )
 
     for _ in range(20):
+        account_service.deposit("E2ESAV001", Money("100"))
+        account_service.withdraw("E2ESAV001", Money("50"))
 
-        account_service.deposit(
+    account = account_service.get_account("E2ESAV001")
+    assert account.balance.amount == Decimal("2000.00")
+    assert account.transaction_count == 40
 
-            "SAV001",
 
-            100,
-
-        )
-
-        account_service.withdraw(
-
-            "SAV001",
-
-            50,
-
-        )
-
-    balance = account_service.get_balance(
-
-        "SAV001"
-
-    )
-
-    assert balance == 2000
-
+# ============================================================
 # Scenario 7 — Full Bank Lifecycle
+# ============================================================
 
-# ============================================================
-# Full Lifecycle
-# ============================================================
 
 def test_complete_bank_lifecycle(
-
     customer_service,
-
     account_service,
-
 ):
+    """Execute a complete customer-to-account banking lifecycle."""
 
-    create_customer(customer_service)
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        1000,
-
+    register_customer(customer_service)
+    open_savings_account(
+        account_service,
+        "E2ELC001",
+        "E2ESAV001",
+        "1000",
     )
 
-    account_service.deposit(
+    account_service.deposit("E2ESAV001", Money("1000"))
+    account_service.withdraw("E2ESAV001", Money("500"))
 
-        "SAV001",
+    account_service.close_account("E2ESAV001")
+    assert not account_service.get_account("E2ESAV001").is_active
 
-        1000,
-
-    )
-
-    account_service.withdraw(
-
-        "SAV001",
-
-        500,
-
-    )
-
-    account_service.close_account(
-
-        "SAV001"
-
-    )
-
-    customer_service.delete_customer(
-
-        "CUST001"
-
-    )
-
-    with pytest.raises(
-
-        CustomerNotFoundError
-
-    ):
-
-        customer_service.find_customer(
-
-            "CUST001"
-        )
-
+    assert customer_service.archive_customer("E2ELC001") is True
+    assert customer_service.find_customer("E2ELC001") is None

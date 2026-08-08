@@ -26,7 +26,9 @@ from utils.constants import Gender, CustomerStatus
 def create_customer(customer_service, customer_number: str):
     """Create and register a complete customer through the service layer."""
 
-    numeric_id = "100000000000" + customer_number[-3:]
+    # The application validator accepts numeric national IDs of exactly
+    # 10 or 12 digits. The final three digits keep each test customer unique.
+    numeric_id = "100000000" + customer_number[-3:]
 
     customer = customer_service.register_customer(
         Customer(

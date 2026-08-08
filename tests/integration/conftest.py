@@ -1,11 +1,13 @@
 """Integration-test fixtures for the current BMS service contracts."""
 
 from datetime import date
+from decimal import Decimal
 
 import pytest
 
 from models.customer import Customer
 from models.savings_account import SavingsAccount
+from models.transaction import Transaction
 from models.value_objects.address import Address
 from models.value_objects.money import Money
 from repositories.account_repository import AccountRepository
@@ -14,7 +16,7 @@ from repositories.transaction_repository import TransactionRepository
 from services.account_service import AccountService
 from services.customer_service import CustomerService
 from services.transaction_service import TransactionService
-from utils.constants import CustomerStatus, Gender
+from utils.constants import CustomerStatus, Gender, TransactionType
 
 
 @pytest.fixture
@@ -85,7 +87,7 @@ def banking_system(customer_service, account_service, transaction_service):
 
 
 def make_customer(customer_id="CUST001", index=1):
-    return Customer(
+    customer = Customer(
         customer_id=customer_id,
         first_name="John",
         last_name="Smith",
@@ -108,6 +110,36 @@ def make_customer(customer_id="CUST001", index=1):
         kyc_completed=True,
     )
 
+    # Compatibility fixture for the current CustomerService eligibility
+    # predicate. The production Customer model does not expose this legacy
+    # flag, so integration tests provide the expected default explicitly.
+    customer.is_deleted = False
+    return customer
+
+
+def make_transaction(
+    number="TXN001",
+    amount="250",
+    customer_id="CUST001",
+    account_number="SAV001",
+):
+    """Build a transaction with the current model fields plus query aliases."""
+    transaction = Transaction(
+        transaction_number=number,
+        transaction_type=TransactionType.DEPOSIT,
+        amount=Money(amount),
+        source_account=None,
+        destination_account=account_number,
+        initiated_by="integration-test",
+        description="Integration test deposit",
+    )
+
+    # TransactionRepository currently queries these legacy aliases while the
+    # Transaction model exposes source_account/destination_account instead.
+    transaction.account_number = account_number
+    transaction.customer_number = customer_id
+    return transaction
+
 
 @pytest.fixture
 def sample_customer(customer_service):
@@ -120,7 +152,7 @@ def sample_account(account_service, sample_customer):
         account_number="SAV001",
         customer_id="CUST001",
         opening_balance=Money("1000"),
-        interest_rate=0.025,
+        interest_rate=Decimal("0.025"),
         minimum_balance=Money("0"),
     )
     return account_service.open_account(account)

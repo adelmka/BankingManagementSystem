@@ -20,25 +20,51 @@ from models.customer import Customer
 from models.savings_account import SavingsAccount
 from models.value_objects.address import Address
 from models.value_objects.money import Money
+from repositories.account_repository import AccountRepository
 from repositories.customer_repository import CustomerRepository
 from utils.constants import CustomerStatus, Gender
 
 
 # ============================================================
-# Test-data helpers
+# Test-data and isolation helpers
 # ============================================================
 
 
+@pytest.fixture(autouse=True)
+def isolate_e2e_storage(tmp_path, monkeypatch):
+    """Give every test a private customer/account CSV store."""
+
+    customer_file = tmp_path / "customers.csv"
+    account_file = tmp_path / "accounts.csv"
+
+    monkeypatch.setattr(
+        CustomerRepository,
+        "CSV_FILE",
+        customer_file,
+    )
+    monkeypatch.setattr(
+        AccountRepository,
+        "CSV_FILE",
+        account_file,
+    )
+
+
 def customer_number(index: int) -> str:
-    """Return a test-specific customer number that cannot collide with fixtures."""
+    """Return a test-specific customer number."""
 
     return f"E2EMC{index:03}"
 
 
 def account_number(index: int) -> str:
-    """Return a test-specific account number that cannot collide with fixtures."""
+    """Return a test-specific account number."""
 
     return f"E2ESA{index:03}"
+
+
+def national_id(index: int) -> str:
+    """Return a unique 12-digit national ID for test data."""
+
+    return f"700000000{index:03}"
 
 
 def make_customer(index: int) -> Customer:
@@ -50,7 +76,7 @@ def make_customer(index: int) -> Customer:
         last_name=f"Last{index}",
         date_of_birth=date(1990, 1, 15),
         gender=Gender.MALE,
-        national_id=f"100000000{index:03}",
+        national_id=national_id(index),
         email=f"e2e-multiple-{index}@bank.com",
         phone_number=f"+966501000{index:03}",
         address=Address(

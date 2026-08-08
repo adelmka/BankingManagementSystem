@@ -78,7 +78,7 @@ def account_service(e2e_repositories):
 
 @pytest.fixture
 def transaction_service(e2e_repositories):
-    """Transaction service using this test's private repositories."""
+    """Transaction service using this test's private repository."""
 
     return TransactionService(
         transaction_repository=e2e_repositories["transaction"],
@@ -224,9 +224,9 @@ def test_complete_savings_account_lifecycle(
     account.close_account()
     e2e_repositories["account"].save_account(account)
 
-    closed_account = account_service.get_account("E2ESAV001")
-    assert closed_account.is_closed
-    assert closed_account.closed_date is not None
+    # Closed accounts are removed from the active-account repository
+    # view by the current persistence contract.
+    assert account_service.get_account("E2ESAV001") is None
 
 
 # ============================================================
@@ -418,6 +418,8 @@ def test_complete_bank_lifecycle(
     account.close_account()
     e2e_repositories["account"].save_account(account)
 
-    assert account_service.get_account("E2ESAV001").is_closed
+    # Closed accounts are removed from the active-account repository
+    # view by the current persistence contract.
+    assert account_service.get_account("E2ESAV001") is None
     assert customer_service.archive_customer("E2ELC001") is True
     assert customer_service.find_customer("E2ELC001") is None

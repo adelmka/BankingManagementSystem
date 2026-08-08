@@ -140,10 +140,7 @@ class AccountService(
             customer_number
         )
 
-        return (
-            customer.is_active
-            and not customer.is_deleted
-        )
+        return customer.is_active
 
     # ------------------------------------------------------------------
 
@@ -240,12 +237,6 @@ class AccountService(
 
             raise ValidationError(
                 "Account is inactive."
-            )
-
-        if account.is_deleted:
-
-            raise ValidationError(
-                "Account has been closed."
             )
 
         return account

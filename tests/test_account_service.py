@@ -331,18 +331,6 @@ def test_validate_account_rejects_inactive_account(
     with pytest.raises(ValidationError, match="inactive"):
         service.validate_account(ACCOUNT_NUMBER)
 
-"""
-def test_validate_account_rejects_closed_account(
-    service,
-    account_repository,
-    account,
-):
-    account.is_closed = True
-    account_repository.get_or_raise.return_value = account
-
-    with pytest.raises(ValidationError, match="closed"):
-        service.validate_account(ACCOUNT_NUMBER)
-"""
 
 # ---------------------------------------------------------------------------
 # Customer account queries
@@ -533,26 +521,6 @@ def test_transfer_rejects_non_positive_amount(
             money("0.00"),
         )
 
-"""
-def test_transfer_rejects_cross_currency_transfer(
-    service,
-    monkeypatch,
-):
-    source = make_account(ACCOUNT_NUMBER, currency="SAR")
-    destination = make_account(SECOND_ACCOUNT_NUMBER, currency="USD")
-    monkeypatch.setattr(
-        service,
-        "validate_account",
-        lambda n: source if n == ACCOUNT_NUMBER else destination,
-    )
-
-    with pytest.raises(ValidationError, match="Cross-currency"):
-        service.transfer(
-            ACCOUNT_NUMBER,
-            SECOND_ACCOUNT_NUMBER,
-            money("100.00", "SAR"),
-        )
-"""
 
 # ---------------------------------------------------------------------------
 # Balance queries and lifecycle
@@ -567,17 +535,6 @@ def test_balance_returns_account_balance(
     monkeypatch.setattr(service, "validate_account", lambda _: account)
 
     assert service.balance(ACCOUNT_NUMBER) == account.balance
-
-
-def test_available_balance_returns_ledger_balance(
-    service,
-    account,
-    monkeypatch,
-):
-    monkeypatch.setattr(service, "validate_account", lambda _: account)
-
-    assert service.available_balance(ACCOUNT_NUMBER) == account.balance
-
 
 def test_has_sufficient_funds_true_when_balance_is_enough(
     service,

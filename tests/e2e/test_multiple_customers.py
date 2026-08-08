@@ -11,380 +11,222 @@ No mocks are used.
 ============================================================
 """
 
+from datetime import date
+from decimal import Decimal
+
 import pytest
 
-# Scenario 1 — Multiple Customers
+from models.customer import Customer
+from models.savings_account import SavingsAccount
+from models.value_objects.address import Address
+from models.value_objects.money import Money
+from repositories.customer_repository import CustomerRepository
+from utils.constants import CustomerStatus, Gender
+
 
 # ============================================================
-# Multiple Customers
+# Test-data helpers
 # ============================================================
 
-def test_create_multiple_customers(
 
-    customer_service,
+def make_customer(index: int) -> Customer:
+    """Build a complete, unique customer using the current domain model."""
 
+    customer_id = f"CUST{index:03}"
+
+    return Customer(
+        customer_id=customer_id,
+        first_name=f"First{index}",
+        last_name=f"Last{index}",
+        date_of_birth=date(1990, 1, 15),
+        gender=Gender.MALE,
+        national_id=f"100000000{index:03}",
+        email=f"user{index}@bank.com",
+        phone_number=f"+966501000{index:03}",
+        address=Address(
+            address_line_1="123 Main Street",
+            address_line_2="",
+            city="Riyadh",
+            state_or_province="Riyadh",
+            postal_code="12345",
+            country="Saudi Arabia",
+        ),
+        middle_name="",
+        customer_status=CustomerStatus.ACTIVE,
+        registration_date=date.today(),
+        kyc_completed=True,
+    )
+
+
+def register_customer(customer_service, index: int) -> Customer:
+    """Register a complete customer through the current service API."""
+
+    return customer_service.register_customer(
+        make_customer(index)
+    )
+
+
+def open_savings_account(
+    account_service,
+    index: int,
+    opening_balance: str,
 ):
+    """Open a savings account through the current account-service API."""
+
+    account = SavingsAccount(
+        account_number=f"SAV{index:03}",
+        customer_id=f"CUST{index:03}",
+        opening_balance=Money(opening_balance),
+        interest_rate=Decimal("0.025"),
+        minimum_balance=Money("0"),
+    )
+
+    return account_service.open_account(account)
+
+
+# ============================================================
+# Scenario 1 — Multiple Customers
+# ============================================================
+
+
+def test_create_multiple_customers(customer_service):
+    """Create and retrieve 100 customers through the real service layer."""
 
     for i in range(100):
-
-        customer_service.create_customer(
-
-            customer_id=f"CUST{i:03}",
-
-            first_name=f"First{i}",
-
-            last_name=f"Last{i}",
-
-            email=f"user{i}@bank.com",
-
-            phone=f"+966500{i:05}",
-
-        )
+        register_customer(customer_service, i)
 
     for i in range(100):
-
-        customer = customer_service.find_customer(
-
-            f"CUST{i:03}"
-
-        )
-
+        customer = customer_service.find_customer(f"CUST{i:03}")
+        assert customer is not None
         assert customer.customer_id == f"CUST{i:03}"
 
+
+# ============================================================
 # Scenario 2 — Multiple Accounts
-
-# ============================================================
-# Multiple Accounts
 # ============================================================
 
-def test_multiple_accounts(
 
-    customer_service,
-
-    account_service,
-
-):
+def test_multiple_accounts(customer_service, account_service):
+    """Create 20 customers and one savings account for each."""
 
     for i in range(20):
-
-        customer_service.create_customer(
-
-            customer_id=f"CUST{i:03}",
-
-            first_name="John",
-
-            last_name="Smith",
-
-            email=f"user{i}@bank.com",
-
-            phone=f"+966500{i:05}",
-
-        )
-
-        account_service.open_savings_account(
-
-            customer_id=f"CUST{i:03}",
-
-            account_number=f"SAV{i:03}",
-
-            opening_balance=1000,
-
-        )
+        register_customer(customer_service, i)
+        open_savings_account(account_service, i, "1000")
 
     for i in range(20):
-
-        account = account_service.find_account(
-
-            f"SAV{i:03}"
-
-        )
-
+        account = account_service.get_account(f"SAV{i:03}")
         assert account.account_number == f"SAV{i:03}"
+        assert account.customer_id == f"CUST{i:03}"
 
+
+# ============================================================
 # Scenario 3 — Deposit To Every Account
-
-# ============================================================
-# Bulk Deposits
 # ============================================================
 
-def test_bulk_deposit(
 
-    customer_service,
-
-    account_service,
-
-):
+def test_bulk_deposit(customer_service, account_service):
+    """Deposit 500 into each of ten savings accounts."""
 
     for i in range(10):
-
-        customer_service.create_customer(
-
-            customer_id=f"CUST{i:03}",
-
-            first_name="John",
-
-            last_name="Smith",
-
-            email=f"user{i}@bank.com",
-
-            phone=f"+966500{i:05}",
-
-        )
-
-        account_service.open_savings_account(
-
-            f"CUST{i:03}",
-
-            f"SAV{i:03}",
-
-            1000,
-
-        )
-
+        register_customer(customer_service, i)
+        open_savings_account(account_service, i, "1000")
         account_service.deposit(
-
             f"SAV{i:03}",
-
-            500,
-
+            Money("500"),
         )
 
     for i in range(10):
+        account = account_service.get_account(f"SAV{i:03}")
+        assert account.balance.amount == Decimal("1500.00")
 
-        assert (
 
-            account_service.get_balance(
-
-                f"SAV{i:03}"
-
-            )
-
-            == 1500
-
-        )
-
+# ============================================================
 # Scenario 4 — Withdraw From Every Account
-
-# ============================================================
-# Bulk Withdrawals
 # ============================================================
 
-def test_bulk_withdrawal(
 
-    customer_service,
-
-    account_service,
-
-):
+def test_bulk_withdrawal(customer_service, account_service):
+    """Withdraw 250 from each of ten savings accounts."""
 
     for i in range(10):
-
-        customer_service.create_customer(
-
-            customer_id=f"CUST{i:03}",
-
-            first_name="John",
-
-            last_name="Smith",
-
-            email=f"user{i}@bank.com",
-
-            phone=f"+966500{i:05}",
-
-        )
-
-        account_service.open_savings_account(
-
-            f"CUST{i:03}",
-
-            f"SAV{i:03}",
-
-            1000,
-
-        )
-
+        register_customer(customer_service, i)
+        open_savings_account(account_service, i, "1000")
         account_service.withdraw(
-
             f"SAV{i:03}",
-
-            250,
-
+            Money("250"),
         )
 
     for i in range(10):
+        account = account_service.get_account(f"SAV{i:03}")
+        assert account.balance.amount == Decimal("750.00")
 
-        assert (
 
-            account_service.get_balance(
-
-                f"SAV{i:03}"
-
-            )
-
-            == 750
-
-        )
-
+# ============================================================
 # Scenario 5 — Mixed Operations
-
-# ============================================================
-# Mixed Banking Operations
 # ============================================================
 
-def test_mixed_operations(
 
-    customer_service,
-
-    account_service,
-
-):
+def test_mixed_operations(customer_service, account_service):
+    """Deposit and withdraw across 15 customer accounts."""
 
     for i in range(15):
-
-        customer_service.create_customer(
-
-            customer_id=f"CUST{i:03}",
-
-            first_name="John",
-
-            last_name="Smith",
-
-            email=f"user{i}@bank.com",
-
-            phone=f"+966500{i:05}",
-
-        )
-
-        account_service.open_savings_account(
-
-            f"CUST{i:03}",
-
-            f"SAV{i:03}",
-
-            1000,
-
-        )
+        register_customer(customer_service, i)
+        open_savings_account(account_service, i, "1000")
 
     for i in range(15):
-
         account_service.deposit(
-
             f"SAV{i:03}",
-
-            100,
-
+            Money("100"),
         )
-
         account_service.withdraw(
-
             f"SAV{i:03}",
-
-            50,
-
+            Money("50"),
         )
 
     for i in range(15):
+        account = account_service.get_account(f"SAV{i:03}")
+        assert account.balance.amount == Decimal("1050.00")
 
-        assert (
 
-            account_service.get_balance(
-
-                f"SAV{i:03}"
-
-            )
-
-            == 1050
-
-        )
-
+# ============================================================
 # Scenario 6 — Repository Restart
+# ============================================================
 
-# ============================================================
-# Restart Bank
-# ============================================================
 
 def test_restart_multiple_customers(
-
     customer_service,
-
-    reload_customer_repository,
-
+    monkeypatch,
 ):
+    """Verify that 25 customers can be reloaded from persistent storage."""
 
     for i in range(25):
+        register_customer(customer_service, i)
 
-        customer_service.create_customer(
-
-            customer_id=f"CUST{i:03}",
-
-            first_name="John",
-
-            last_name="Smith",
-
-            email=f"user{i}@bank.com",
-
-            phone=f"+966500{i:05}",
-
-        )
-
-    repository = reload_customer_repository()
+    # Reconstruct a fresh repository against the exact same isolated file.
+    storage_file = customer_service._repository.CSV_FILE
+    monkeypatch.setattr(CustomerRepository, "CSV_FILE", storage_file)
+    restarted_repository = CustomerRepository()
 
     for i in range(25):
-
-        customer = repository.find_by_id(
-
+        customer = restarted_repository.find_by_customer_number(
             f"CUST{i:03}"
-
         )
-
+        assert customer is not None
         assert customer.customer_id == f"CUST{i:03}"
 
+
+# ============================================================
 # Scenario 7 — Large Dataset
-
-# ============================================================
-# Large Dataset
 # ============================================================
 
-def test_large_bank_dataset(
 
-    customer_service,
-
-    account_service,
-
-):
+def test_large_bank_dataset(customer_service, account_service):
+    """Create 100 customers and 100 associated savings accounts."""
 
     for i in range(100):
-
-        customer_service.create_customer(
-
-            customer_id=f"CUST{i:03}",
-
-            first_name="John",
-
-            last_name="Smith",
-
-            email=f"user{i}@bank.com",
-
-            phone=f"+966500{i:05}",
-
-        )
-
-        account_service.open_savings_account(
-
-            f"CUST{i:03}",
-
-            f"SAV{i:03}",
-
-            100,
-
-        )
+        register_customer(customer_service, i)
+        open_savings_account(account_service, i, "100")
 
     for i in range(100):
-
-        account = account_service.find_account(
-
-            f"SAV{i:03}"
-
-        )
-
+        account = account_service.get_account(f"SAV{i:03}")
         assert account.customer_id == f"CUST{i:03}"

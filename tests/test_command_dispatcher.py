@@ -1,1319 +1,193 @@
-"""
-============================================================
-Command Dispatcher Tests
-Part 1
+"""Unit tests for the CLI CommandDispatcher."""
 
-Coverage
-
-• Dispatcher construction
-• Command registration
-• Duplicate registration
-• Command lookup
-• Dispatch execution
-============================================================
-"""
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from application.command_dispatcher import CommandDispatcher
-
-from exceptions.banking_exceptions import (
-    ValidationError,
-)
-
-class DummyCommand:
-
-    def __init__(self):
-
-        self.executed = False
-
-    def execute(self):
-
-        self.executed = True
-
-        return "SUCCESS"
-
-# ============================================================
-# Construction
-# ============================================================
-
-def test_dispatcher_created():
-
-    dispatcher = CommandDispatcher()
-
-    assert dispatcher is not None
+from cli.command_dispatcher import CommandDispatcher
 
 
-def test_dispatcher_empty():
-
-    dispatcher = CommandDispatcher()
-
-    assert dispatcher.command_count() == 0
+@pytest.fixture
+def logger():
+    return MagicMock(name="logger")
 
 
-def test_dispatcher_bool():
-
-    dispatcher = CommandDispatcher()
-
-    assert bool(dispatcher) is False
-
-# ============================================================
-# Registration
-# ============================================================
-
-def test_register_command():
-
-    dispatcher = CommandDispatcher()
-
-    command = DummyCommand()
-
-    dispatcher.register(
-
-        "dummy",
-
-        command,
-
-    )
-
-    assert dispatcher.command_count() == 1
-
-
-def test_registered_command_exists():
-
-    dispatcher = CommandDispatcher()
-
-    command = DummyCommand()
-
-    dispatcher.register(
-
-        "dummy",
-
-        command,
-
-    )
-
-    assert dispatcher.exists("dummy")
-
-# ============================================================
-# Duplicate Registration
-# ============================================================
-
-def test_duplicate_registration():
-
-    dispatcher = CommandDispatcher()
-
-    command = DummyCommand()
-
-    dispatcher.register(
-
-        "dummy",
-
-        command,
-
-    )
-
-    with pytest.raises(
-
-        ValidationError
-
+@pytest.fixture
+def dispatcher(logger):
+    with patch(
+        "cli.command_dispatcher.get_logger",
+        return_value=logger,
     ):
+        instance = CommandDispatcher()
+    return instance
 
-        dispatcher.register(
 
-            "dummy",
+@pytest.fixture
+def handler():
+    return MagicMock(name="handler", return_value="result")
 
-            command,
 
+class TestCommandDispatcher:
+    def test_constructor_initializes_empty_registry(self, dispatcher):
+        assert dispatcher.get_registered_commands() == []
+
+    def test_constructor_initializes_logger(self, dispatcher, logger):
+        assert dispatcher.logger is logger
+
+    def test_register_command_adds_handler(self, dispatcher, handler):
+        dispatcher.register_command("deposit", handler)
+        assert dispatcher.has_command("deposit") is True
+        assert dispatcher.get_registered_commands() == ["deposit"]
+
+    def test_register_command_normalizes_name(self, dispatcher, handler):
+        dispatcher.register_command("  DePoSiT  ", handler)
+        assert dispatcher.has_command("deposit") is True
+        assert dispatcher.get_registered_commands() == ["deposit"]
+
+    def test_register_command_logs_registration(self, dispatcher, handler, logger):
+        dispatcher.register_command("deposit", handler)
+        logger.debug.assert_called_once_with(
+            "Registered CLI command: %s", "deposit"
         )
 
-# ============================================================
-# Lookup
-# ============================================================
+    def test_register_command_rejects_empty_name(self, dispatcher, handler):
+        with pytest.raises(ValueError, match="Command name cannot be empty"):
+            dispatcher.register_command("", handler)
 
-def test_get_registered_command():
+    def test_register_command_rejects_non_callable_handler(self, dispatcher):
+        with pytest.raises(TypeError, match="Command handler must be callable"):
+            dispatcher.register_command("deposit", object())
 
-    dispatcher = CommandDispatcher()
+    def test_register_command_rejects_duplicate_name(self, dispatcher, handler):
+        dispatcher.register_command("deposit", handler)
+        with pytest.raises(ValueError, match="Command already registered: deposit"):
+            dispatcher.register_command("DEPOSIT", MagicMock())
 
-    command = DummyCommand()
+    def test_duplicate_registration_keeps_original_handler(self, dispatcher, handler):
+        dispatcher.register_command("deposit", handler)
+        with pytest.raises(ValueError):
+            dispatcher.register_command("deposit", MagicMock())
+        dispatcher.dispatch("deposit")
+        handler.assert_called_once_with()
 
-    dispatcher.register(
+    def test_unregister_command_removes_registered_command(self, dispatcher, handler):
+        dispatcher.register_command("deposit", handler)
+        dispatcher.unregister_command("deposit")
+        assert dispatcher.has_command("deposit") is False
+        assert dispatcher.get_registered_commands() == []
 
-        "dummy",
+    def test_unregister_command_normalizes_name(self, dispatcher, handler):
+        dispatcher.register_command("deposit", handler)
+        dispatcher.unregister_command("  DEPOSIT  ")
+        assert dispatcher.has_command("deposit") is False
 
-        command,
+    def test_unregister_unknown_command_is_noop(self, dispatcher):
+        dispatcher.unregister_command("missing")
+        assert dispatcher.get_registered_commands() == []
 
-    )
+    def test_dispatch_executes_registered_handler(self, dispatcher, handler):
+        dispatcher.register_command("deposit", handler)
+        assert dispatcher.dispatch("deposit") == "result"
+        handler.assert_called_once_with()
 
-    found = dispatcher.get(
+    def test_dispatch_normalizes_command_name(self, dispatcher, handler):
+        dispatcher.register_command("deposit", handler)
+        dispatcher.dispatch("  DEPOSIT  ")
+        handler.assert_called_once_with()
 
-        "dummy",
+    def test_dispatch_forwards_positional_arguments(self, dispatcher, handler):
+        dispatcher.register_command("transfer", handler)
+        dispatcher.dispatch("transfer", "A001", "A002", 100)
+        handler.assert_called_once_with("A001", "A002", 100)
 
-    )
-
-    assert found is command
-
-
-def test_unknown_command_returns_none():
-
-    dispatcher = CommandDispatcher()
-
-    assert dispatcher.get(
-
-        "missing",
-
-    ) is None
-
-# ============================================================
-# Dispatch
-# ============================================================
-
-def test_dispatch_executes_command():
-
-    dispatcher = CommandDispatcher()
-
-    command = DummyCommand()
-
-    dispatcher.register(
-
-        "dummy",
-
-        command,
-
-    )
-
-    result = dispatcher.dispatch(
-
-        "dummy",
-
-    )
-
-    assert command.executed
-
-    assert result == "SUCCESS"
-
-
-def test_dispatch_unknown_command():
-
-    dispatcher = CommandDispatcher()
-
-    with pytest.raises(
-
-        KeyError
-
-    ):
-
+    def test_dispatch_forwards_keyword_arguments(self, dispatcher, handler):
+        dispatcher.register_command("transfer", handler)
         dispatcher.dispatch(
-
-            "missing",
-
+            "transfer", source="A001", destination="A002", amount=100
+        )
+        handler.assert_called_once_with(
+            source="A001", destination="A002", amount=100
         )
 
-# ============================================================
-# Collection Helpers
-# ============================================================
-
-def test_len():
-
-    dispatcher = CommandDispatcher()
-
-    dispatcher.register(
-
-        "one",
-
-        DummyCommand(),
-
-    )
-
-    dispatcher.register(
-
-        "two",
-
-        DummyCommand(),
-
-    )
-
-    assert len(dispatcher) == 2
-
-
-def test_iteration():
-
-    dispatcher = CommandDispatcher()
-
-    dispatcher.register(
-
-        "one",
-
-        DummyCommand(),
-
-    )
-
-    dispatcher.register(
-
-        "two",
-
-        DummyCommand(),
-
-    )
-
-    count = 0
-
-    for _ in dispatcher:
-
-        count += 1
-
-    assert count == 2
-
-# PART 2
-
-# ============================================================
-# Dummy Command With Arguments
-# ============================================================
-
-class ParameterCommand:
-
-    def __init__(self):
-
-        self.received = None
-
-    def execute(self, *args, **kwargs):
-
-        self.received = (args, kwargs)
-
-        return self.received
-
-# ============================================================
-# Parameter Passing
-# ============================================================
-
-def test_dispatch_passes_positional_arguments():
-
-    dispatcher = CommandDispatcher()
-
-    command = ParameterCommand()
-
-    dispatcher.register(
-
-        "echo",
-
-        command,
-
-    )
-
-    dispatcher.dispatch(
-
-        "echo",
-
-        10,
-
-        "ABC",
-
-    )
-
-    assert command.received[0] == (10, "ABC")
-
-
-def test_dispatch_passes_keyword_arguments():
-
-    dispatcher = CommandDispatcher()
-
-    command = ParameterCommand()
-
-    dispatcher.register(
-
-        "echo",
-
-        command,
-
-    )
-
-    dispatcher.dispatch(
-
-        "echo",
-
-        amount=100,
-
-        account="SA1001",
-
-    )
-
-    assert command.received[1] == {
-
-        "amount": 100,
-
-        "account": "SA1001",
-
-    }
-
-# ============================================================
-# Command Aliases
-# ============================================================
-
-def test_register_alias():
-
-    dispatcher = CommandDispatcher()
-
-    command = DummyCommand()
-
-    dispatcher.register(
-
-        "deposit",
-
-        command,
-
-    )
-
-    dispatcher.register_alias(
-
-        "dep",
-
-        "deposit",
-
-    )
-
-    assert dispatcher.exists("dep")
-
-
-def test_dispatch_alias():
-
-    dispatcher = CommandDispatcher()
-
-    command = DummyCommand()
-
-    dispatcher.register(
-
-        "deposit",
-
-        command,
-
-    )
-
-    dispatcher.register_alias(
-
-        "dep",
-
-        "deposit",
-
-    )
-
-    dispatcher.dispatch("dep")
-
-    assert command.executed
-
-# ============================================================
-# Unregister
-# ============================================================
-
-def test_unregister_command():
-
-    dispatcher = CommandDispatcher()
-
-    dispatcher.register(
-
-        "dummy",
-
-        DummyCommand(),
-
-    )
-
-    dispatcher.unregister("dummy")
-
-    assert dispatcher.command_count() == 0
-
-
-def test_unregister_unknown_command():
-
-    dispatcher = CommandDispatcher()
-
-    with pytest.raises(KeyError):
-
-        dispatcher.unregister(
-
-            "missing",
-
+    def test_dispatch_returns_handler_result(self, dispatcher):
+        handler = MagicMock(return_value={"status": "ok"})
+        dispatcher.register_command("status", handler)
+        assert dispatcher.dispatch("status") == {"status": "ok"}
+
+    def test_dispatch_logs_execution(self, dispatcher, handler, logger):
+        dispatcher.register_command("deposit", handler)
+        logger.reset_mock()
+        dispatcher.dispatch("deposit")
+        logger.debug.assert_called_once_with(
+            "Executing CLI command: %s", "deposit"
         )
 
-# ============================================================
-# Command Listing
-# ============================================================
-
-def test_list_commands():
-
-    dispatcher = CommandDispatcher()
-
-    dispatcher.register(
-
-        "deposit",
-
-        DummyCommand(),
-
-    )
-
-    dispatcher.register(
-
-        "withdraw",
-
-        DummyCommand(),
-
-    )
-
-    commands = dispatcher.list_commands()
-
-    assert "deposit" in commands
-
-    assert "withdraw" in commands
-
-
-def test_list_commands_empty():
-
-    dispatcher = CommandDispatcher()
-
-    assert dispatcher.list_commands() == []
-
-# ============================================================
-# Help
-# ============================================================
-
-def test_help_for_registered_command():
-
-    dispatcher = CommandDispatcher()
-
-    dispatcher.register(
-
-        "deposit",
-
-        DummyCommand(),
-
-    )
-
-    help_text = dispatcher.help(
-
-        "deposit",
-
-    )
-
-    assert help_text is not None
-
-
-def test_help_unknown_command():
-
-    dispatcher = CommandDispatcher()
-
-    with pytest.raises(KeyError):
-
-        dispatcher.help(
-
-            "missing",
-
-        )
-
-# ============================================================
-# Dispatcher Robustness
-# ============================================================
-
-class FailingCommand:
-
-    def execute(self):
-
-        raise RuntimeError(
-
-            "Failure"
-
-        )
-
-
-def test_dispatch_propagates_exception():
-
-    dispatcher = CommandDispatcher()
-
-    dispatcher.register(
-
-        "fail",
-
-        FailingCommand(),
-
-    )
-
-    with pytest.raises(RuntimeError):
-
-        dispatcher.dispatch(
-
-            "fail",
-
-        )
-
-
-def test_dispatch_after_exception():
-
-    dispatcher = CommandDispatcher()
-
-    dispatcher.register(
-
-        "fail",
-
-        FailingCommand(),
-
-    )
-
-    dispatcher.register(
-
-        "ok",
-
-        DummyCommand(),
-
-    )
-
-    try:
-
-        dispatcher.dispatch(
-
-            "fail",
-
-        )
-
-    except RuntimeError:
-
-        pass
-
-    result = dispatcher.dispatch(
-
-        "ok",
-
-    )
-
-    assert result == "SUCCESS"
-
-# ============================================================
-# Registration Validation
-# ============================================================
-
-def test_register_none_name():
-
-    dispatcher = CommandDispatcher()
-
-    with pytest.raises(
-
-        ValidationError
-
+    def test_dispatch_unknown_command_raises_value_error(self, dispatcher):
+        with pytest.raises(ValueError, match="Unknown command: missing"):
+            dispatcher.dispatch("missing")
+
+    def test_dispatch_unknown_command_does_not_log_execution(self, dispatcher, logger):
+        with pytest.raises(ValueError):
+            dispatcher.dispatch("missing")
+        logger.debug.assert_not_called()
+
+    def test_dispatch_propagates_handler_exception(self, dispatcher):
+        handler = MagicMock(side_effect=RuntimeError("handler failed"))
+        dispatcher.register_command("deposit", handler)
+        with pytest.raises(RuntimeError, match="handler failed"):
+            dispatcher.dispatch("deposit")
+
+    @pytest.mark.parametrize("command", ["deposit", "DEPOSIT", " deposit "])
+    def test_has_command_is_case_and_whitespace_insensitive(
+        self, dispatcher, handler, command
     ):
+        dispatcher.register_command("deposit", handler)
+        assert dispatcher.has_command(command) is True
 
-        dispatcher.register(
-
-            None,
-
-            DummyCommand(),
-
-        )
-
-
-def test_register_none_command():
-
-    dispatcher = CommandDispatcher()
-
-    with pytest.raises(
-
-        ValidationError
-
+    @pytest.mark.parametrize("command", ["withdraw", "", "missing"])
+    def test_has_command_returns_false_for_unregistered_command(
+        self, dispatcher, command
     ):
-
-        dispatcher.register(
-
-            "dummy",
-
-            None,
-
-        )
-
-# PART 3
-
-# ============================================================
-# Command Metadata
-# ============================================================
-
-class MetadataCommand:
-
-    name = "metadata"
-
-    description = "Metadata test command"
-
-    usage = "metadata [options]"
-
-    def execute(self):
-
-        return "OK"
-
-# ============================================================
-# Metadata Retrieval
-# ============================================================
-
-def test_command_metadata():
-
-    dispatcher = CommandDispatcher()
-
-    dispatcher.register(
-
-        "metadata",
-
-        MetadataCommand(),
-
-    )
-
-    command = dispatcher.get(
-
-        "metadata",
-
-    )
-
-    assert command.name == "metadata"
-
-    assert command.description == "Metadata test command"
-
-    assert command.usage == "metadata [options]"
-
-
-def test_command_without_metadata():
-
-    dispatcher = CommandDispatcher()
-
-    dispatcher.register(
-
-        "dummy",
-
-        DummyCommand(),
-
-    )
-
-    command = dispatcher.get("dummy")
-
-    assert command is not None
-
-# ============================================================
-# Bulk Registration
-# ============================================================
-
-def test_bulk_registration():
-
-    dispatcher = CommandDispatcher()
-
-    for i in range(20):
-
-        dispatcher.register(
-
-            f"cmd{i}",
-
-            DummyCommand(),
-
-        )
-
-    assert dispatcher.command_count() == 20
-
-
-def test_bulk_dispatch():
-
-    dispatcher = CommandDispatcher()
-
-    commands = []
-
-    for i in range(10):
-
-        cmd = DummyCommand()
-
-        commands.append(cmd)
-
-        dispatcher.register(
-
-            f"cmd{i}",
-
-            cmd,
-
-        )
-
-    for i in range(10):
-
-        dispatcher.dispatch(
-
-            f"cmd{i}",
-
-        )
-
-    assert all(
-
-        c.executed
-
-        for c in commands
-
-    )
-
-# ============================================================
-# Iteration
-# ============================================================
-
-def test_iteration():
-
-    dispatcher = CommandDispatcher()
-
-    for i in range(5):
-
-        dispatcher.register(
-
-            f"cmd{i}",
-
-            DummyCommand(),
-
-        )
-
-    count = 0
-
-    for command in dispatcher:
-
-        assert command is not None
-
-        count += 1
-
-    assert count == 5
-
-
-def test_items_iteration():
-
-    dispatcher = CommandDispatcher()
-
-    dispatcher.register(
-
-        "deposit",
-
-        DummyCommand(),
-
-    )
-
-    for name, command in dispatcher.items():
-
-        assert name == "deposit"
-
-        assert command is not None
-
-# ============================================================
-# Iteration
-# ============================================================
-
-def test_iteration():
-
-    dispatcher = CommandDispatcher()
-
-    for i in range(5):
-
-        dispatcher.register(
-
-            f"cmd{i}",
-
-            DummyCommand(),
-
-        )
-
-    count = 0
-
-    for command in dispatcher:
-
-        assert command is not None
-
-        count += 1
-
-    assert count == 5
-
-
-def test_items_iteration():
-
-    dispatcher = CommandDispatcher()
-
-    dispatcher.register(
-
-        "deposit",
-
-        DummyCommand(),
-
-    )
-
-    for name, command in dispatcher.items():
-
-        assert name == "deposit"
-
-        assert command is not None
-
-# ============================================================
-# Stress Testing
-# ============================================================
-
-def test_register_100_commands():
-
-    dispatcher = CommandDispatcher()
-
-    for i in range(100):
-
-        dispatcher.register(
-
-            f"cmd{i}",
-
-            DummyCommand(),
-
-        )
-
-    assert dispatcher.command_count() == 100
-
-
-def test_dispatch_100_commands():
-
-    dispatcher = CommandDispatcher()
-
-    for i in range(100):
-
-        dispatcher.register(
-
-            f"cmd{i}",
-
-            DummyCommand(),
-
-        )
-
-    for i in range(100):
-
-        dispatcher.dispatch(
-
-            f"cmd{i}",
-
-        )
-
-    assert dispatcher.command_count() == 100
-
-# ============================================================
-# Clear Dispatcher
-# ============================================================
-
-def test_clear_dispatcher():
-
-    dispatcher = CommandDispatcher()
-
-    for i in range(10):
-
-        dispatcher.register(
-
-            f"cmd{i}",
-
-            DummyCommand(),
-
-        )
-
-    dispatcher.clear()
-
-    assert dispatcher.command_count() == 0
-
-    assert bool(dispatcher) is False
-
-# ============================================================
-# Dispatcher Integrity
-# ============================================================
-
-def test_dispatcher_consistency():
-
-    dispatcher = CommandDispatcher()
-
-    for i in range(25):
-
-        dispatcher.register(
-
-            f"cmd{i}",
-
-            DummyCommand(),
-
-        )
-
-    assert len(dispatcher) == dispatcher.command_count()
-
-
-def test_registered_commands_unique():
-
-    dispatcher = CommandDispatcher()
-
-    for i in range(30):
-
-        dispatcher.register(
-
-            f"cmd{i}",
-
-            DummyCommand(),
-
-        )
-
-    names = dispatcher.command_names()
-
-    assert len(names) == len(set(names))
-
-# PART 4
-
-# ============================================================
-# Dispatcher Integrity
-# ============================================================
-
-def test_dispatcher_consistency():
-
-    dispatcher = CommandDispatcher()
-
-    for i in range(25):
-
-        dispatcher.register(
-
-            f"cmd{i}",
-
-            DummyCommand(),
-
-        )
-
-    assert len(dispatcher) == dispatcher.command_count()
-
-
-def test_registered_commands_unique():
-
-    dispatcher = CommandDispatcher()
-
-    for i in range(30):
-
-        dispatcher.register(
-
-            f"cmd{i}",
-
-            DummyCommand(),
-
-        )
-
-    names = dispatcher.command_names()
-
-    assert len(names) == len(set(names))
-
-# ============================================================
-# Command Replacement Policy
-# ============================================================
-
-def test_replace_existing_command_not_allowed():
-
-    dispatcher = CommandDispatcher()
-
-    dispatcher.register(
-
-        "deposit",
-
-        DummyCommand(),
-
-    )
-
-    with pytest.raises(
-
-        ValidationError
-
-    ):
-
-        dispatcher.register(
-
-            "deposit",
-
-            DummyCommand(),
-
-        )
-
-
-def test_alias_cannot_shadow_existing_command():
-
-    dispatcher = CommandDispatcher()
-
-    dispatcher.register(
-
-        "deposit",
-
-        DummyCommand(),
-
-    )
-
-    dispatcher.register(
-
-        "withdraw",
-
-        DummyCommand(),
-
-    )
-
-    with pytest.raises(
-
-        ValidationError
-
-    ):
-
-        dispatcher.register_alias(
-
-            "withdraw",
-
-            "deposit",
-
-        )
-
-# ============================================================
-# Dispatcher Lifecycle
-# ============================================================
-
-def test_register_dispatch_unregister():
-
-    dispatcher = CommandDispatcher()
-
-    command = DummyCommand()
-
-    dispatcher.register(
-
-        "dummy",
-
-        command,
-
-    )
-
-    dispatcher.dispatch("dummy")
-
-    assert command.executed
-
-    dispatcher.unregister("dummy")
-
-    assert dispatcher.command_count() == 0
-
-
-def test_clear_then_register_again():
-
-    dispatcher = CommandDispatcher()
-
-    dispatcher.register(
-
-        "one",
-
-        DummyCommand(),
-
-    )
-
-    dispatcher.clear()
-
-    dispatcher.register(
-
-        "two",
-
-        DummyCommand(),
-
-    )
-
-    assert dispatcher.command_count() == 1
-
-    assert dispatcher.exists("two")
-
-# ============================================================
-# Sequential Dispatch
-# ============================================================
-
-def test_multiple_dispatches():
-
-    dispatcher = CommandDispatcher()
-
-    command = DummyCommand()
-
-    dispatcher.register(
-
-        "dummy",
-
-        command,
-
-    )
-
-    for _ in range(50):
-
-        command.executed = False
-
-        dispatcher.dispatch("dummy")
-
-        assert command.executed
-
-
-def test_dispatch_does_not_remove_command():
-
-    dispatcher = CommandDispatcher()
-
-    dispatcher.register(
-
-        "dummy",
-
-        DummyCommand(),
-
-    )
-
-    dispatcher.dispatch("dummy")
-
-    assert dispatcher.exists("dummy")
-
-# ============================================================
-# Robustness
-# ============================================================
-
-def test_dispatch_after_clear():
-
-    dispatcher = CommandDispatcher()
-
-    dispatcher.register(
-
-        "dummy",
-
-        DummyCommand(),
-
-    )
-
-    dispatcher.clear()
-
-    with pytest.raises(KeyError):
-
-        dispatcher.dispatch("dummy")
-
-
-def test_unregister_twice():
-
-    dispatcher = CommandDispatcher()
-
-    dispatcher.register(
-
-        "dummy",
-
-        DummyCommand(),
-
-    )
-
-    dispatcher.unregister("dummy")
-
-    with pytest.raises(KeyError):
-
-        dispatcher.unregister("dummy")
-
-# ============================================================
-# Bulk Lifecycle
-# ============================================================
-
-def test_register_unregister_many():
-
-    dispatcher = CommandDispatcher()
-
-    for i in range(50):
-
-        dispatcher.register(
-
-            f"cmd{i}",
-
-            DummyCommand(),
-
-        )
-
-    assert dispatcher.command_count() == 50
-
-    for i in range(50):
-
-        dispatcher.unregister(
-
-            f"cmd{i}",
-
-        )
-
-    assert dispatcher.command_count() == 0
-
-
-def test_register_clear_register():
-
-    dispatcher = CommandDispatcher()
-
-    for i in range(20):
-
-        dispatcher.register(
-
-            f"a{i}",
-
-            DummyCommand(),
-
-        )
-
-    dispatcher.clear()
-
-    for i in range(20):
-
-        dispatcher.register(
-
-            f"b{i}",
-
-            DummyCommand(),
-
-        )
-
-    assert dispatcher.command_count() == 20
-
-# ============================================================
-# Integrity
-# ============================================================
-
-def test_internal_count_consistency():
-
-    dispatcher = CommandDispatcher()
-
-    for i in range(75):
-
-        dispatcher.register(
-
-            f"cmd{i}",
-
-            DummyCommand(),
-
-        )
-
-    assert (
-
-        len(dispatcher)
-
-        ==
-
-        dispatcher.command_count()
-
-    )
-
-
-def test_iteration_matches_count():
-
-    dispatcher = CommandDispatcher()
-
-    for i in range(40):
-
-        dispatcher.register(
-
-            f"cmd{i}",
-
-            DummyCommand(),
-
-        )
-
-    count = sum(1 for _ in dispatcher)
-
-    assert count == dispatcher.command_count()
-
-# ============================================================
-# Empty State
-# ============================================================
-
-def test_empty_iteration():
-
-    dispatcher = CommandDispatcher()
-
-    count = 0
-
-    for _ in dispatcher:
-
-        count += 1
-
-    assert count == 0
-
-
-def test_empty_command_names():
-
-    dispatcher = CommandDispatcher()
-
-    assert dispatcher.command_names() == []
-
+        assert dispatcher.has_command(command) is False
+
+    def test_get_registered_commands_preserves_registration_order(self, dispatcher):
+        dispatcher.register_command("first", MagicMock())
+        dispatcher.register_command("second", MagicMock())
+        dispatcher.register_command("third", MagicMock())
+        assert dispatcher.get_registered_commands() == [
+            "first", "second", "third"
+        ]
+
+    def test_get_registered_commands_returns_copy(self, dispatcher, handler):
+        dispatcher.register_command("deposit", handler)
+        commands = dispatcher.get_registered_commands()
+        commands.append("injected")
+        assert dispatcher.get_registered_commands() == ["deposit"]
+
+    def test_clear_commands_removes_all_commands(self, dispatcher):
+        dispatcher.register_command("deposit", MagicMock())
+        dispatcher.register_command("withdraw", MagicMock())
+        dispatcher.clear_commands()
+        assert dispatcher.get_registered_commands() == []
+        assert dispatcher.has_command("deposit") is False
+        assert dispatcher.has_command("withdraw") is False
+
+    def test_clear_commands_can_be_called_when_empty(self, dispatcher):
+        dispatcher.clear_commands()
+        assert dispatcher.get_registered_commands() == []
+
+    def test_commands_can_be_registered_after_clear(self, dispatcher, handler):
+        dispatcher.register_command("deposit", handler)
+        dispatcher.clear_commands()
+        dispatcher.register_command("withdraw", handler)
+        assert dispatcher.get_registered_commands() == ["withdraw"]
+        assert dispatcher.dispatch("withdraw") == "result"
+
+    def test_unregister_one_command_leaves_other_commands_intact(self, dispatcher):
+        first = MagicMock(return_value="first")
+        second = MagicMock(return_value="second")
+        dispatcher.register_command("first", first)
+        dispatcher.register_command("second", second)
+        dispatcher.unregister_command("first")
+        assert dispatcher.get_registered_commands() == ["second"]
+        assert dispatcher.dispatch("second") == "second"

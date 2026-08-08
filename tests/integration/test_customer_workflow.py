@@ -82,8 +82,15 @@ def test_customer_search_and_statistics(customer_service):
 def test_customer_lifecycle(customer_service):
     register(customer_service)
     assert customer_service.get_customer("CUST001").is_active
+
     customer_service.deactivate_customer("CUST001")
-    assert not customer_service.get_customer("CUST001").is_active
+    inactive_customer = customer_service.find_customer(
+        "CUST001",
+        active_only=False,
+    )
+    assert inactive_customer is not None
+    assert not inactive_customer.is_active
+
     customer_service.activate_customer("CUST001")
     assert customer_service.get_customer("CUST001").is_active
 

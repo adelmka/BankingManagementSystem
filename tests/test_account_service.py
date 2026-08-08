@@ -337,7 +337,7 @@ def test_validate_account_rejects_closed_account(
     account_repository,
     account,
 ):
-    account.is_deleted = True
+    account.is_closed = True
     account_repository.get_or_raise.return_value = account
 
     with pytest.raises(ValidationError, match="closed"):

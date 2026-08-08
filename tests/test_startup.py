@@ -3,7 +3,8 @@ Tests for application/startup.py.
 
 These tests target the current startup public contract and isolate
 startup/shutdown orchestration by mocking Bootstrap, Application, and
-module logging. No production architecture is changed by this test suite.
+the module-level logger. No production architecture is changed by this
+ test suite.
 """
 
 from types import SimpleNamespace
@@ -31,27 +32,20 @@ def application():
 
 
 def test_start_application_uses_supplied_config(config, application, logger):
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ), patch(
+    with patch("application.startup._logger", logger), patch(
         "application.startup.Bootstrap"
     ) as bootstrap_cls:
-        bootstrap = bootstrap_cls.return_value
-        bootstrap.initialize.return_value = application
+        bootstrap_cls.return_value.initialize.return_value = application
 
         result = start_application(config=config)
 
     assert result is application
     bootstrap_cls.assert_called_once_with(config=config)
-    bootstrap.initialize.assert_called_once_with()
+    bootstrap_cls.return_value.initialize.assert_called_once_with()
 
 
 def test_start_application_returns_exact_application_instance(application, logger):
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ), patch(
+    with patch("application.startup._logger", logger), patch(
         "application.startup.Bootstrap"
     ) as bootstrap_cls:
         bootstrap_cls.return_value.initialize.return_value = application
@@ -62,10 +56,7 @@ def test_start_application_returns_exact_application_instance(application, logge
 
 
 def test_start_application_creates_bootstrap_with_default_config(logger, application):
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ), patch(
+    with patch("application.startup._logger", logger), patch(
         "application.startup.Bootstrap"
     ) as bootstrap_cls:
         bootstrap_cls.return_value.initialize.return_value = application
@@ -77,10 +68,7 @@ def test_start_application_creates_bootstrap_with_default_config(logger, applica
 
 
 def test_start_application_initializes_bootstrap_once(config, application, logger):
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ), patch(
+    with patch("application.startup._logger", logger), patch(
         "application.startup.Bootstrap"
     ) as bootstrap_cls:
         bootstrap_cls.return_value.initialize.return_value = application
@@ -91,10 +79,7 @@ def test_start_application_initializes_bootstrap_once(config, application, logge
 
 
 def test_start_application_logs_launch_message(config, application, logger):
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ), patch(
+    with patch("application.startup._logger", logger), patch(
         "application.startup.Bootstrap"
     ) as bootstrap_cls:
         bootstrap_cls.return_value.initialize.return_value = application
@@ -106,10 +91,7 @@ def test_start_application_logs_launch_message(config, application, logger):
 
 
 def test_start_application_logs_success_message(config, application, logger):
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ), patch(
+    with patch("application.startup._logger", logger), patch(
         "application.startup.Bootstrap"
     ) as bootstrap_cls:
         bootstrap_cls.return_value.initialize.return_value = application
@@ -121,10 +103,7 @@ def test_start_application_logs_success_message(config, application, logger):
 
 
 def test_start_application_logs_launch_before_success(config, application, logger):
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ), patch(
+    with patch("application.startup._logger", logger), patch(
         "application.startup.Bootstrap"
     ) as bootstrap_cls:
         bootstrap_cls.return_value.initialize.return_value = application
@@ -143,10 +122,7 @@ def test_start_application_does_not_log_success_when_initialization_fails(
     config,
     logger,
 ):
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ), patch(
+    with patch("application.startup._logger", logger), patch(
         "application.startup.Bootstrap"
     ) as bootstrap_cls:
         bootstrap_cls.return_value.initialize.side_effect = RuntimeError(
@@ -162,10 +138,7 @@ def test_start_application_does_not_log_success_when_initialization_fails(
 
 
 def test_start_application_propagates_bootstrap_exception(config, logger):
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ), patch(
+    with patch("application.startup._logger", logger), patch(
         "application.startup.Bootstrap"
     ) as bootstrap_cls:
         bootstrap_cls.return_value.initialize.side_effect = ValueError(
@@ -181,10 +154,7 @@ def test_start_application_does_not_construct_application_directly(
     application,
     logger,
 ):
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ), patch(
+    with patch("application.startup._logger", logger), patch(
         "application.startup.Bootstrap"
     ) as bootstrap_cls, patch(
         "application.startup.Application"
@@ -198,10 +168,7 @@ def test_start_application_does_not_construct_application_directly(
 
 
 def test_shutdown_application_calls_application_shutdown(application, logger):
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ):
+    with patch("application.startup._logger", logger):
         result = shutdown_application(application)
 
     assert result is None
@@ -209,10 +176,7 @@ def test_shutdown_application_calls_application_shutdown(application, logger):
 
 
 def test_shutdown_application_logs_stopped_message(application, logger):
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ):
+    with patch("application.startup._logger", logger):
         shutdown_application(application)
 
     messages = [call.args[0] for call in logger.info.call_args_list]
@@ -224,10 +188,7 @@ def test_shutdown_application_logs_after_shutdown(application, logger):
     application.shutdown.side_effect = lambda: events.append("shutdown")
     logger.info.side_effect = lambda message: events.append(message)
 
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ):
+    with patch("application.startup._logger", logger):
         shutdown_application(application)
 
     assert events == [
@@ -239,10 +200,7 @@ def test_shutdown_application_logs_after_shutdown(application, logger):
 def test_shutdown_application_propagates_shutdown_exception(application, logger):
     application.shutdown.side_effect = RuntimeError("shutdown failure")
 
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ):
+    with patch("application.startup._logger", logger):
         with pytest.raises(RuntimeError, match="shutdown failure"):
             shutdown_application(application)
 
@@ -255,10 +213,7 @@ def test_shutdown_application_does_not_swallow_application_errors(
 ):
     application.shutdown.side_effect = ValueError("application error")
 
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ):
+    with patch("application.startup._logger", logger):
         with pytest.raises(ValueError, match="application error"):
             shutdown_application(application)
 
@@ -266,10 +221,7 @@ def test_shutdown_application_does_not_swallow_application_errors(
 def test_shutdown_application_accepts_application_like_object(logger):
     application = SimpleNamespace(shutdown=MagicMock())
 
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ):
+    with patch("application.startup._logger", logger):
         shutdown_application(application)
 
     application.shutdown.assert_called_once_with()
@@ -280,10 +232,7 @@ def test_start_application_passes_same_config_object_to_bootstrap(
     application,
     logger,
 ):
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ), patch(
+    with patch("application.startup._logger", logger), patch(
         "application.startup.Bootstrap"
     ) as bootstrap_cls:
         bootstrap_cls.return_value.initialize.return_value = application
@@ -309,10 +258,7 @@ def test_start_application_constructs_bootstrap_before_initialize(
         )
         return bootstrap
 
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ), patch(
+    with patch("application.startup._logger", logger), patch(
         "application.startup.Bootstrap",
         side_effect=construct_bootstrap,
     ):
@@ -331,10 +277,7 @@ def test_start_application_returns_initialized_application_even_if_logger_is_moc
 ):
     logger = MagicMock()
 
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ), patch(
+    with patch("application.startup._logger", logger), patch(
         "application.startup.Bootstrap"
     ) as bootstrap_cls:
         bootstrap_cls.return_value.initialize.return_value = application
@@ -345,10 +288,7 @@ def test_start_application_returns_initialized_application_even_if_logger_is_moc
 
 
 def test_shutdown_application_returns_none(application, logger):
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ):
+    with patch("application.startup._logger", logger):
         assert shutdown_application(application) is None
 
 
@@ -364,10 +304,7 @@ def test_start_application_success_log_is_not_emitted_before_initialize(
         events.append("initialize")
         return application
 
-    with patch(
-        "application.startup.get_logger",
-        return_value=logger,
-    ), patch(
+    with patch("application.startup._logger", logger), patch(
         "application.startup.Bootstrap"
     ) as bootstrap_cls:
         bootstrap_cls.return_value.initialize.side_effect = initialize

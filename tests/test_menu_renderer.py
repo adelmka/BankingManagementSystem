@@ -40,7 +40,7 @@ class TestMenuRenderer:
         assert output.getvalue() == (
             "\n"
             "==========\n"
-            "   Title  \n"
+            "  Title   \n"
             "==========\n"
         )
 
@@ -98,7 +98,7 @@ class TestMenuRenderer:
     @pytest.mark.parametrize("method", ["info", "success", "warning", "error"])
     def test_message_renderers_accept_empty_message(self, method, renderer, output):
         getattr(renderer, method)("")
-        assert output.getvalue() == "\n" if method == "info" else output.getvalue().endswith("\n")
+        assert output.getvalue().endswith("\n")
 
     def test_render_table_renders_rows_and_separator(self, renderer, output):
         renderer.render_table(

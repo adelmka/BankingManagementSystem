@@ -1,4 +1,4 @@
-﻿"""
+"""
 ===============================================================================
 Banking Management System (BMS)
 
@@ -28,628 +28,210 @@ from exceptions import (
     EntityNotFoundError,
 )
 
-T = TypeVar(
-    "T",
-    bound=BaseEntity,
-)
+T = TypeVar("T", bound=BaseEntity)
 
 
-class BaseRepository(
-    ABC,
-    Generic[T],
-):
-    """
-    Generic CSV repository.
-
-    Concrete repositories inherit from this class and provide the
-    entity class and CSV file location.
-    """
+class BaseRepository(ABC, Generic[T]):
+    """Generic CSV repository."""
 
     ENTITY_CLASS: type[T]
-
     CSV_FILE: Path
 
-    # ------------------------------------------------------------------
-    # Constructor
-    # ------------------------------------------------------------------
-
     def __init__(self) -> None:
-
         self._entities: dict[str, T] = {}
-
         self._ensure_storage_exists()
-
         self.load()
 
-    # ------------------------------------------------------------------
-    # Storage Initialization
-    # ------------------------------------------------------------------
-
     def _ensure_storage_exists(self) -> None:
-        """
-        Ensure that the repository storage exists.
-
-        Creates parent directories and the CSV file if necessary.
-        """
-
-        self.CSV_FILE.parent.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
-
+        """Ensure that the repository storage exists."""
+        self.CSV_FILE.parent.mkdir(parents=True, exist_ok=True)
         if not self.CSV_FILE.exists():
-
             self.CSV_FILE.touch()
-
-    # ------------------------------------------------------------------
-    # Repository Information
-    # ------------------------------------------------------------------
 
     @property
     def count(self) -> int:
-        """
-        Return the number of loaded entities.
-        """
-
         return len(self._entities)
 
-    # ------------------------------------------------------------------
-
     def is_empty(self) -> bool:
-        """
-        Determine whether the repository contains any entities.
-        """
-
         return self.count == 0
 
-# PART 2
-
-    # ------------------------------------------------------------------
-    # Lookup Operations
-    # ------------------------------------------------------------------
-
-    def find_by_id(
-        self,
-        entity_id: UUID,
-    ) -> T | None:
-        """
-        Return the entity with the specified identifier.
-
-        Returns None if the entity does not exist.
-        """
-
+    def find_by_id(self, entity_id: UUID) -> T | None:
         return self._entities.get(entity_id)
 
-    # ------------------------------------------------------------------
-
-    def find_all(
-        self,
-        *,
-        active_only: bool = True,
-    ) -> list[T]:
-        """
-        Return all entities.
-
-        Parameters
-        ----------
-        active_only:
-            If True, only active entities are returned.
-        """
-
+    def find_all(self, *, active_only: bool = True) -> list[T]:
         if active_only:
-
-            return [
-                entity
-                for entity in self._entities.values()
-                if entity.is_active
-            ]
-
+            return [entity for entity in self._entities.values() if entity.is_active]
         return list(self._entities.values())
 
-    # ------------------------------------------------------------------
-
-    def exists(
-        self,
-        entity_id: UUID,
-    ) -> bool:
-        """
-        Determine whether an entity exists.
-        """
-
+    def exists(self, entity_id: UUID) -> bool:
         return entity_id in self._entities
 
-    # ------------------------------------------------------------------
-    # CRUD Operations
-    # ------------------------------------------------------------------
-
-    def add(
-        self,
-        entity: T,
-    ) -> None:
-        """
-        Add a new entity.
-
-        Raises
-        ------
-        ValueError
-            If the entity already exists.
-        """
-
+    def add(self, entity: T) -> None:
         if self.exists(entity.entity_id):
-
-            raise ValueError(
-                f"{entity.__class__.__name__} already exists."
-            )
-
+            raise ValueError(f"{entity.__class__.__name__} already exists.")
         self._entities[entity.entity_id] = entity
 
-    # ------------------------------------------------------------------
-
-    def update(
-        self,
-        entity: T,
-    ) -> None:
-        """
-        Update an existing entity.
-        """
-        # print(entity.entity_id)
-        # print(id(entity))
-        # print(self._entities.keys())
-        # print(entity.entity_id in self._entities)
-
+    def update(self, entity: T) -> None:
         if not self.exists(entity.entity_id):
-
-            raise ValueError(
-                f"{entity.__class__.__name__} does not exist."
-            )
-
+            raise ValueError(f"{entity.__class__.__name__} does not exist.")
         entity.touch()
-
         self._entities[entity.entity_id] = entity
 
-    # ------------------------------------------------------------------
-
-    def remove(
-        self,
-        entity_id: UUID,
-    ) -> bool:
-        """
-        Soft-delete an entity.
-
-        Returns
-        -------
-        bool
-            True if the entity existed.
-        """
-
+    def remove(self, entity_id: UUID) -> bool:
         entity = self.find_by_id(entity_id)
-
         if entity is None:
             return False
-
         entity.deactivate()
-
         return True
 
-    # ------------------------------------------------------------------
-
-    def restore(
-        self,
-        entity_id: UUID,
-    ) -> bool:
-        """
-        Restore a previously deactivated entity.
-        """
-
+    def restore(self, entity_id: UUID) -> bool:
         entity = self.find_by_id(entity_id)
-
         if entity is None:
             return False
-
         entity.activate()
-
         return True
-
-    # ------------------------------------------------------------------
 
     def clear_cache(self) -> None:
-        """
-        Remove all entities from the in-memory cache.
-
-        Does not modify persistent storage.
-        """
-
         self._entities.clear()
 
-    # ------------------------------------------------------------------
-
     def __len__(self) -> int:
-        """
-        Return the number of cached entities.
-        """
-
         return self.count
 
-    # ------------------------------------------------------------------
-
-    def __contains__(
-        self,
-        entity_id: UUID,
-    ) -> bool:
-        """
-        Support the 'in' operator.
-        """
-
+    def __contains__(self, entity_id: UUID) -> bool:
         return self.exists(entity_id)
 
-# PART 3
-
-    # ------------------------------------------------------------------
-    # Persistence
-    # ------------------------------------------------------------------
-
     def load(self) -> None:
-        """
-        Load all entities from the CSV file into memory.
-        """
-
+        """Load all entities from the CSV file into memory."""
         self.clear_cache()
-
-        if (
-            not self.CSV_FILE.exists()
-            or self.CSV_FILE.stat().st_size == 0
-        ):
+        if not self.CSV_FILE.exists() or self.CSV_FILE.stat().st_size == 0:
             return
 
-        with self.CSV_FILE.open(
-            mode="r",
-            newline="",
-            encoding="utf-8",
-        ) as csv_file:
-
+        with self.CSV_FILE.open(mode="r", newline="", encoding="utf-8") as csv_file:
             reader = csv.DictReader(csv_file)
-
             for row in reader:
-
                 entity = self.ENTITY_CLASS.from_dict(row)
-
-                self._entities[
-                    entity.entity_id
-                ] = entity
-
-    # ------------------------------------------------------------------
+                self._entities[entity.entity_id] = entity
 
     def save(self) -> None:
         """
         Persist all cached entities to the CSV file.
-        """
 
+        The repository may contain different concrete subclasses of the
+        declared entity type. Build the CSV schema from the union of all
+        serialized fields so subclass-specific fields are not rejected when
+        heterogeneous entities are persisted together.
+        """
         entities = list(self._entities.values())
 
-        with self.CSV_FILE.open(
-            mode="w",
-            newline="",
-            encoding="utf-8",
-        ) as csv_file:
-
-            # Empty repository
+        with self.CSV_FILE.open(mode="w", newline="", encoding="utf-8") as csv_file:
             if not entities:
-
                 csv_file.write("")
-
                 return
 
-            fieldnames = list(
-                entities[0].to_dict().keys()
-            )
+            rows = [entity.to_dict() for entity in entities]
+
+            fieldnames: list[str] = []
+            for row in rows:
+                for field in row:
+                    if field not in fieldnames:
+                        fieldnames.append(field)
 
             writer = csv.DictWriter(
                 csv_file,
                 fieldnames=fieldnames,
+                restval="",
             )
-
             writer.writeheader()
-
-            for entity in entities:
-
-                writer.writerow(
-                    entity.to_dict()
-                )
-
-    # ------------------------------------------------------------------
+            writer.writerows(rows)
 
     def reload(self) -> None:
-        """
-        Discard the current cache and reload the repository from disk.
-        """
-
         self.load()
 
-    # ------------------------------------------------------------------
-
     def flush(self) -> None:
-        """
-        Persist the current cache to storage.
-
-        This method is provided as an alias for save() to better express
-        intent when called by service classes.
-        """
-
         self.save()
 
-    # ------------------------------------------------------------------
-
     def refresh(self) -> None:
-        """
-        Synchronize the repository with persistent storage.
-
-        Current implementation reloads from disk.
-        """
-
         self.reload()
-
-    # ------------------------------------------------------------------
 
     @property
     def file_exists(self) -> bool:
-        """
-        Determine whether the repository storage file exists.
-        """
-
         return self.CSV_FILE.exists()
-
-    # ------------------------------------------------------------------
 
     @property
     def storage_path(self) -> Path:
-        """
-        Return the CSV storage path.
-        """
-
         return self.CSV_FILE
 
-# PART 4
-
-    # ------------------------------------------------------------------
-    # Query Operations
-    # ------------------------------------------------------------------
-
-    def find_first(
-        self,
-        predicate,
-        *,
-        active_only: bool = True,
-    ) -> T | None:
-        """
-        Return the first entity matching the supplied predicate.
-
-        Returns None if no matching entity exists.
-        """
-
-        for entity in self.find_all(
-            active_only=active_only,
-        ):
+    def find_first(self, predicate, *, active_only: bool = True) -> T | None:
+        for entity in self.find_all(active_only=active_only):
             if predicate(entity):
                 return entity
-
         return None
 
-    # ------------------------------------------------------------------
-
-    def find_where(
-        self,
-        predicate,
-        *,
-        active_only: bool = True,
-    ) -> list[T]:
-        """
-        Return all entities matching the supplied predicate.
-        """
-
+    def find_where(self, predicate, *, active_only: bool = True) -> list[T]:
         return [
             entity
-            for entity in self.find_all(
-                active_only=active_only,
-            )
+            for entity in self.find_all(active_only=active_only)
             if predicate(entity)
         ]
 
-    # ------------------------------------------------------------------
+    def count_where(self, predicate, *, active_only: bool = True) -> int:
+        return len(self.find_where(predicate, active_only=active_only))
 
-    def count_where(
-        self,
-        predicate,
-        *,
-        active_only: bool = True,
-    ) -> int:
-        """
-        Count entities matching the supplied predicate.
-        """
-
-        return len(
-            self.find_where(
-                predicate,
-                active_only=active_only,
-            )
-        )
-
-    # ------------------------------------------------------------------
-
-    def any_match(
-        self,
-        predicate,
-        *,
-        active_only: bool = True,
-    ) -> bool:
-        """
-        Determine whether any entity satisfies the predicate.
-        """
-
+    def any_match(self, predicate, *, active_only: bool = True) -> bool:
         return any(
             predicate(entity)
-            for entity in self.find_all(
-                active_only=active_only,
-            )
+            for entity in self.find_all(active_only=active_only)
         )
 
-    # ------------------------------------------------------------------
-
-    def all_match(
-        self,
-        predicate,
-        *,
-        active_only: bool = True,
-    ) -> bool:
-        """
-        Determine whether all entities satisfy the predicate.
-        """
-
-        entities = self.find_all(
-            active_only=active_only,
-        )
-
+    def all_match(self, predicate, *, active_only: bool = True) -> bool:
+        entities = self.find_all(active_only=active_only)
         if not entities:
             return False
+        return all(predicate(entity) for entity in entities)
 
-        return all(
-            predicate(entity)
-            for entity in entities
-        )
-
-    # ------------------------------------------------------------------
-
-    def sort(
-        self,
-        *,
-        key,
-        reverse: bool = False,
-        active_only: bool = True,
-    ) -> list[T]:
-        """
-        Return entities sorted using the supplied key function.
-        """
-
+    def sort(self, *, key, reverse: bool = False, active_only: bool = True) -> list[T]:
         return sorted(
-            self.find_all(
-                active_only=active_only,
-            ),
+            self.find_all(active_only=active_only),
             key=key,
             reverse=reverse,
         )
 
-    # ------------------------------------------------------------------
-
-    def first(
-        self,
-        *,
-        active_only: bool = True,
-    ) -> T | None:
-        """
-        Return the first entity in the repository.
-        """
-
-        entities = self.find_all(
-            active_only=active_only,
-        )
-
+    def first(self, *, active_only: bool = True) -> T | None:
+        entities = self.find_all(active_only=active_only)
         return entities[0] if entities else None
 
-    # ------------------------------------------------------------------
-
-    def last(
-        self,
-        *,
-        active_only: bool = True,
-    ) -> T | None:
-        """
-        Return the last entity in the repository.
-        """
-
-        entities = self.find_all(
-            active_only=active_only,
-        )
-
+    def last(self, *, active_only: bool = True) -> T | None:
+        entities = self.find_all(active_only=active_only)
         return entities[-1] if entities else None
 
-# PART 5
-
-    # ------------------------------------------------------------------
-    # Administrative Operations
-    # ------------------------------------------------------------------
-
-    def save_entity(
-        self,
-        entity: T,
-    ) -> None:
-        """
-        Add or update an entity, then persist the repository.
-        """
-
+    def save_entity(self, entity: T) -> None:
         if self.exists(entity.entity_id):
             self.update(entity)
         else:
             self.add(entity)
-
         self.save()
 
-    # ------------------------------------------------------------------
-
-    def delete_entity(
-        self,
-        entity_id: UUID,
-    ) -> bool:
-        """
-        Soft-delete an entity and persist the repository.
-
-        Returns
-        -------
-        bool
-            True if the entity existed.
-        """
-
+    def delete_entity(self, entity_id: UUID) -> bool:
         removed = self.remove(entity_id)
-
         if removed:
             self.save()
-
         return removed
 
-    # ------------------------------------------------------------------
-
     def purge_inactive(self) -> int:
-        """
-        Permanently remove inactive entities from the repository.
-
-        Returns
-        -------
-        int
-            Number of entities removed.
-        """
-
         inactive_ids = [
             entity.entity_id
             for entity in self._entities.values()
             if not entity.is_active
         ]
-
         for entity_id in inactive_ids:
             del self._entities[entity_id]
-
         if inactive_ids:
             self.save()
-
         return len(inactive_ids)
 
-    # ------------------------------------------------------------------
-
     def repository_summary(self) -> dict[str, object]:
-        """
-        Return summary information about the repository.
-        """
-
         total = len(self._entities)
         active = len(self.find_all(active_only=True))
-
         return {
             "repository": self.__class__.__name__,
             "entity_type": self.ENTITY_CLASS.__name__,
@@ -659,36 +241,13 @@ class BaseRepository(
             "inactive_entities": total - active,
         }
 
-    # ------------------------------------------------------------------
-    # Iteration
-    # ------------------------------------------------------------------
-
     def __iter__(self):
-        """
-        Iterate over all active entities.
-        """
-
         return iter(self.find_all())
 
-    # ------------------------------------------------------------------
-
     def __str__(self) -> str:
-        """
-        Human-readable repository representation.
-        """
-
-        return (
-            f"{self.__class__.__name__}"
-            f"(entities={self.count})"
-        )
-
-    # ------------------------------------------------------------------
+        return f"{self.__class__.__name__}(entities={self.count})"
 
     def __repr__(self) -> str:
-        """
-        Developer-friendly repository representation.
-        """
-
         return (
             f"{self.__class__.__name__}("
             f"entity_type={self.ENTITY_CLASS.__name__}, "
@@ -696,112 +255,88 @@ class BaseRepository(
             f"file='{self.CSV_FILE}')"
         )
 
-# PART 6
-
-    # ------------------------------------------------------------------
-    # Auto Save
-    # ------------------------------------------------------------------
-
     @property
     def auto_save(self) -> bool:
-        """
-        Return whether automatic persistence is enabled.
-        """
-
         return getattr(self, "_auto_save", True)
 
-    # ------------------------------------------------------------------
-
     @auto_save.setter
-    def auto_save(
-        self,
-        value: bool,
-    ) -> None:
-        """
-        Enable or disable automatic persistence.
-        """
-
+    def auto_save(self, value: bool) -> None:
         self._auto_save = bool(value)
 
-    # ------------------------------------------------------------------
-
     def commit(self) -> None:
-        """
-        Persist pending changes.
-
-        Alias for flush() to provide terminology familiar to developers
-        accustomed to database transaction semantics.
-        """
-
         self.flush()
 
-    # ------------------------------------------------------------------
-    # Context Manager Support
-    # ------------------------------------------------------------------
-
     def __enter__(self) -> "BaseRepository[T]":
-        """
-        Enter the repository context.
-        """
-
         return self
 
-    # ------------------------------------------------------------------
-
-    def __exit__(
-        self,
-        exc_type,
-        exc_value,
-        traceback,
-    ) -> bool:
-        """
-        Automatically persist changes when leaving the context if no
-        exception occurred and auto-save is enabled.
-        """
-
-        if (
-            exc_type is None
-            and self.auto_save
-        ):
+    def __exit__(self, exc_type, exc_value, traceback) -> bool:
+        if exc_type is None and self.auto_save:
             self.flush()
-
         return False
 
-    # ------------------------------------------------------------------
-    # Utility Methods
-    # ------------------------------------------------------------------
-
     def close(self) -> None:
-        """
-        Flush pending changes.
-
-        Included for API symmetry and future extensibility.
-        """
-
         if self.auto_save:
             self.flush()
 
-    # ------------------------------------------------------------------
+    def validate_entity(self, entity: T) -> None:
+        if not isinstance(entity, self.ENTITY_CLASS):
+            raise TypeError(
+                f"Expected {self.ENTITY_CLASS.__name__}, "
+                f"got {entity.__class__.__name__}."
+            )
 
-    @property
-    def entity_type(self) -> type[T]:
-        """
-        Return the entity class managed by this repository.
-        """
+    def get_or_raise(self, entity_id: UUID) -> T:
+        entity = self.find_by_id(entity_id)
+        if entity is None:
+            raise EntityNotFoundError(
+                f"{self.ENTITY_CLASS.__name__} not found."
+            )
+        return entity
 
-        return self.ENTITY_CLASS
+    def add_or_update(self, entity: T) -> None:
+        if self.exists(entity.entity_id):
+            self.update(entity)
+        else:
+            self.add(entity)
+        self.save()
 
-    # ------------------------------------------------------------------
+    def save_all(self, entities: list[T]) -> None:
+        for entity in entities:
+            if self.exists(entity.entity_id):
+                self.update(entity)
+            else:
+                self.add(entity)
+        self.save()
 
-    @property
-    def repository_name(self) -> str:
-        """
-        Return the repository class name.
-        """
+    def count_active(self) -> int:
+        return len(self.find_all(active_only=True))
 
-        return self.__class__.__name__
+    def count_inactive(self) -> int:
+        return len(self.find_all(active_only=False)) - self.count_active()
 
+    def deactivate_all(self) -> None:
+        for entity in self._entities.values():
+            entity.deactivate()
+        self.save()
 
-# ----------------------------------------------------------------------
-# End of File
-# ----------------------------------------------------------------------
+    def activate_all(self) -> None:
+        for entity in self._entities.values():
+            entity.activate()
+        self.save()
+
+    def save_if_auto(self) -> None:
+        if self.auto_save:
+            self.save()
+
+    def save_and_refresh(self) -> None:
+        self.save()
+        self.reload()
+
+    def storage_size(self) -> int:
+        if not self.CSV_FILE.exists():
+            return 0
+        return self.CSV_FILE.stat().st_size
+
+    def clear(self) -> None:
+        self.clear_cache()
+        self.save()

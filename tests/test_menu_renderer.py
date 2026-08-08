@@ -1,1249 +1,196 @@
-"""
-============================================================
-Menu Renderer Tests
-Part 1
+"""Tests for the current CLI MenuRenderer contract."""
 
-Coverage
-
-• Construction
-• Headers
-• Footers
-• Empty menu
-• Single option
-• Multiple options
-============================================================
-"""
+from io import StringIO
 
 import pytest
 
-from application.menu_renderer import MenuRenderer
+from cli.menu import MenuDefinition, MenuOption
+from cli.menu_renderer import MenuRenderer
 
-# ============================================================
-# Construction
-# ============================================================
 
-def test_menu_renderer_created():
+@pytest.fixture
+def output():
+    return StringIO()
 
-    renderer = MenuRenderer()
 
-    assert renderer is not None
+@pytest.fixture
+def renderer(output):
+    return MenuRenderer(output=output, line_width=10)
 
-# ============================================================
-# Header Rendering
-# ============================================================
 
-def test_render_header(
+class TestMenuRenderer:
+    def test_constructor_retains_output_and_line_width(self, renderer, output):
+        assert renderer.output is output
+        assert renderer.line_width == 10
 
-    capsys,
+    def test_default_line_width_is_70(self):
+        renderer = MenuRenderer(output=StringIO())
+        assert renderer.line_width == 70
 
-):
+    def test_write_outputs_a_line(self, renderer, output):
+        renderer._write("hello")
+        assert output.getvalue() == "hello\n"
 
-    renderer = MenuRenderer()
+    def test_write_defaults_to_blank_line(self, renderer, output):
+        renderer._write()
+        assert output.getvalue() == "\n"
 
-    renderer.render_header(
-
-        "Banking Management System"
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert "Banking Management System" in captured.out
-
-
-def test_header_not_empty(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_header(
-
-        "Main Menu"
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert len(captured.out.strip()) > 0
-
-# ============================================================
-# Footer Rendering
-# ============================================================
-
-def test_render_footer(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_footer()
-
-    captured = capsys.readouterr()
-
-    assert captured.out is not None
-
-
-def test_footer_contains_separator(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_footer()
-
-    captured = capsys.readouterr()
-
-    assert "-" in captured.out or "=" in captured.out
-
-# ============================================================
-# Empty Menu
-# ============================================================
-
-def test_render_empty_menu(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        []
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert captured.out is not None
-
-
-def test_empty_menu_not_crash(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu([])
-
-    capsys.readouterr()
-
-# ============================================================
-# Single Menu Item
-# ============================================================
-
-def test_single_option(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        [
-
-            "Create Customer",
-
-        ]
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert "Create Customer" in captured.out
-
-
-def test_single_option_numbering(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        [
-
-            "Create Customer",
-
-        ]
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert "1" in captured.out
-
-# ============================================================
-# Multiple Menu Items
-# ============================================================
-
-def test_multiple_options(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        [
-
-            "Create Customer",
-
-            "Open Account",
-
-            "Exit",
-
-        ]
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert "Create Customer" in captured.out
-
-    assert "Open Account" in captured.out
-
-    assert "Exit" in captured.out
-
-
-def test_multiple_option_numbers(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        [
-
-            "A",
-
-            "B",
-
-            "C",
-
-        ]
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert "1" in captured.out
-
-    assert "2" in captured.out
-
-    assert "3" in captured.out
-
-# ============================================================
-# Output Integrity
-# ============================================================
-
-def test_renderer_outputs_string(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        [
-
-            "Exit",
-
-        ]
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert isinstance(
-
-        captured.out,
-
-        str,
-
-    )
-
-
-def test_renderer_produces_output(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        [
-
-            "Exit",
-
-        ]
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert len(
-
-        captured.out,
-
-    ) > 0
-
-
-# PART 2
-
-# ============================================================
-# Output Integrity
-# ============================================================
-
-def test_renderer_outputs_string(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        [
-
-            "Exit",
-
-        ]
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert isinstance(
-
-        captured.out,
-
-        str,
-
-    )
-
-
-def test_renderer_produces_output(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        [
-
-            "Exit",
-
-        ]
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert len(
-
-        captured.out,
-
-    ) > 0
-
-# ============================================================
-# Alignment
-# ============================================================
-
-def test_option_alignment(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        [
-
-            "Create Customer",
-
-            "Deposit",
-
-            "Exit",
-
-        ]
-
-    )
-
-    captured = capsys.readouterr()
-
-    lines = [
-
-        line
-
-        for line in captured.out.splitlines()
-
-        if line.strip()
-
-    ]
-
-    assert len(lines) >= 3
-
-
-def test_option_number_alignment(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        [
-
-            "One",
-
-            "Two",
-
-            "Three",
-
-        ]
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert "1" in captured.out
-
-    assert "2" in captured.out
-
-    assert "3" in captured.out
-
-# ============================================================
-# Long Menu Items
-# ============================================================
-
-def test_long_option(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        [
-
-            "Create Customer With Full Personal Information",
-
-        ]
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert (
-
-        "Create Customer"
-
-        in captured.out
-
-    )
-
-
-def test_multiple_long_options(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        [
-
-            "Open Savings Account",
-
-            "Open Current Account",
-
-            "Open Time Deposit Account",
-
-        ]
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert (
-
-        "Savings"
-
-        in captured.out
-
-    )
-
-    assert (
-
-        "Current"
-
-        in captured.out
-
-    )
-
-    assert (
-
-        "Time Deposit"
-
-        in captured.out
-
-    )
-
-# ============================================================
-# Unicode Support
-# ============================================================
-
-def test_unicode_option(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        [
-
-            "إضافة عميل",
-
-        ]
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert "إضافة عميل" in captured.out
-
-
-def test_unicode_title(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        ["Exit"],
-
-        title="القائمة الرئيسية",
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert "القائمة الرئيسية" in captured.out
-
-# ============================================================
-# Duplicate Items
-# ============================================================
-
-def test_duplicate_options(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        [
-
-            "Deposit",
-
-            "Deposit",
-
-        ]
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert (
-
-        captured.out.count(
-
-            "Deposit"
-
+    def test_render_heading(self, renderer, output):
+        renderer.render_heading("Title")
+        assert output.getvalue() == (
+            "\n"
+            "==========\n"
+            "   Title  \n"
+            "==========\n"
         )
 
-        == 2
-
-    )
-
-
-def test_duplicate_numbering(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        [
-
-            "A",
-
-            "A",
-
-            "A",
-
-        ]
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert "1" in captured.out
-
-    assert "2" in captured.out
-
-    assert "3" in captured.out
-
-# ============================================================
-# Separators
-# ============================================================
-
-def test_separator_rendering(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_separator()
-
-    captured = capsys.readouterr()
-
-    assert (
-
-        "=" in captured.out
-
-        or
-
-        "-" in captured.out
-
-    )
-
-
-def test_separator_not_empty(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_separator()
-
-    captured = capsys.readouterr()
-
-    assert len(
-
-        captured.out.strip()
-
-    ) > 0
-
-# ============================================================
-# Dynamic Menu Generation
-# ============================================================
-
-def test_dynamic_menu(
-
-    capsys,
-
-):
-
-    options = [
-
-        f"Option {i}"
-
-        for i in range(10)
-
-    ]
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        options,
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert "Option 0" in captured.out
-
-    assert "Option 9" in captured.out
-
-
-def test_dynamic_menu_count(
-
-    capsys,
-
-):
-
-    options = [
-
-        f"Item {i}"
-
-        for i in range(20)
-
-    ]
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        options,
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert (
-
-        captured.out.count(
-
-            "Item"
-
+    def test_render_separator(self, renderer, output):
+        renderer.render_separator()
+        assert output.getvalue() == "----------\n"
+
+    def test_render_menu_renders_heading_options_and_separator(self, renderer, output):
+        menu = MenuDefinition(
+            "Main",
+            (
+                MenuOption("1", "First"),
+                MenuOption("2", "Second"),
+                MenuOption("0", "Exit"),
+            ),
+        )
+        renderer.render_menu(menu)
+        assert output.getvalue() == (
+            "\n"
+            "==========\n"
+            "   Main   \n"
+            "==========\n"
+            " 1. First\n"
+            " 2. Second\n"
+            " 0. Exit\n"
+            "----------\n"
         )
 
-        == 20
-
-    )
-
-# ============================================================
-# Styling Consistency
-# ============================================================
-
-def test_header_footer_together(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_header(
-
-        "Bank"
-
-    )
-
-    renderer.render_footer()
-
-    captured = capsys.readouterr()
-
-    assert "Bank" in captured.out
-
-
-def test_complete_menu_render(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_header(
-
-        "Main"
-
-    )
-
-    renderer.render_menu(
-
-        [
-
-            "Deposit",
-
-            "Withdraw",
-
-            "Exit",
-
-        ]
-
-    )
-
-    renderer.render_footer()
-
-    captured = capsys.readouterr()
-
-    assert "Deposit" in captured.out
-
-    assert "Withdraw" in captured.out
-
-    assert "Exit" in captured.out
-
-
-# PART 3
-
-# ============================================================
-# None Handling
-# ============================================================
-
-def test_none_menu():
-
-    renderer = MenuRenderer()
-
-    with pytest.raises(
-
-        ValueError
-
-    ):
-
-        renderer.render_menu(
-
-            None
-
+    def test_render_menu_preserves_option_order(self, renderer, output):
+        menu = MenuDefinition(
+            "Menu",
+            (
+                MenuOption("3", "Third"),
+                MenuOption("1", "First"),
+                MenuOption("2", "Second"),
+            ),
         )
+        renderer.render_menu(menu)
+        lines = output.getvalue().splitlines()
+        assert lines[4:7] == [" 3. Third", " 1. First", " 2. Second"]
 
-
-def test_none_title(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
+    @pytest.mark.parametrize(
+        ("method", "prefix"),
         [
-
-            "Exit",
-
+            ("info", "[INFO] "),
+            ("success", "[SUCCESS] "),
+            ("warning", "[WARNING] "),
+            ("error", "[ERROR] "),
         ],
-
-        title=None,
-
     )
+    def test_message_renderers(self, method, prefix, renderer, output):
+        getattr(renderer, method)("Operation complete")
+        assert output.getvalue() == f"{prefix}Operation complete\n"
 
-    captured = capsys.readouterr()
+    @pytest.mark.parametrize("method", ["info", "success", "warning", "error"])
+    def test_message_renderers_accept_empty_message(self, method, renderer, output):
+        getattr(renderer, method)("")
+        assert output.getvalue() == "\n" if method == "info" else output.getvalue().endswith("\n")
 
-    assert "Exit" in captured.out
-
-# ============================================================
-# Invalid Menu Items
-# ============================================================
-
-def test_non_string_option(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        [
-
-            123,
-
-            "Exit",
-
-        ]
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert "123" in captured.out
-
-
-def test_object_option(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        [
-
-            object(),
-
-        ]
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert len(
-
-        captured.out
-
-    ) > 0
-
-# ============================================================
-# Repeated Rendering
-# ============================================================
-
-def test_render_same_menu_multiple_times(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    menu = [
-
-        "Deposit",
-
-        "Withdraw",
-
-        "Exit",
-
-    ]
-
-    for _ in range(20):
-
-        renderer.render_menu(
-
-            menu,
-
+    def test_render_table_renders_rows_and_separator(self, renderer, output):
+        renderer.render_table(
+            [
+                ("Name", "Balance"),
+                ("Adel", "100.50"),
+            ]
+        )
+        assert output.getvalue() == (
+            "Name | Balance\n"
+            "Adel | 100.50\n"
+            "----------\n"
         )
 
-    captured = capsys.readouterr()
-
-    assert (
-
-        captured.out.count(
-
-            "Deposit"
-
-        )
-
-        == 20
-
-    )
-
-
-def test_render_headers_multiple_times(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    for i in range(10):
-
-        renderer.render_header(
-
-            f"Menu {i}"
-
-        )
-
-    captured = capsys.readouterr()
-
-    assert "Menu 9" in captured.out
-
-# ============================================================
-# Large Menus
-# ============================================================
-
-def test_render_100_options(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    menu = [
-
-        f"Option {i}"
-
-        for i in range(100)
-
-    ]
-
-    renderer.render_menu(
-
-        menu,
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert (
-
-        "Option 99"
-
-        in captured.out
-
-    )
-
-
-def test_large_menu_numbering(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    menu = [
-
-        f"Item {i}"
-
-        for i in range(100)
-
-    ]
-
-    renderer.render_menu(
-
-        menu,
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert "100" in captured.out
-
-# ============================================================
-# Empty States
-# ============================================================
-
-def test_empty_header(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_header("")
-
-    captured = capsys.readouterr()
-
-    assert captured.out is not None
-
-
-def test_empty_footer(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_footer()
-
-    captured = capsys.readouterr()
-
-    assert captured.out is not None
-
-# ============================================================
-# Lifecycle
-# ============================================================
-
-def test_renderer_reusable(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_header(
-
-        "Main"
-
-    )
-
-    renderer.render_menu(
-
-        [
-
-            "Deposit",
-
-        ]
-
-    )
-
-    renderer.render_footer()
-
-    renderer.render_header(
-
-        "Reports"
-
-    )
-
-    renderer.render_menu(
-
-        [
-
-            "Summary",
-
-        ]
-
-    )
-
-    renderer.render_footer()
-
-    captured = capsys.readouterr()
-
-    assert "Reports" in captured.out
-
-
-def test_renderer_stateless(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        [
-
-            "A",
-
-        ]
-
-    )
-
-    renderer.render_menu(
-
-        [
-
-            "B",
-
-        ]
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert "A" in captured.out
-
-    assert "B" in captured.out
-
-# ============================================================
-# Integrity
-# ============================================================
-
-def test_complete_render_cycle(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_header(
-
-        "Bank"
-
-    )
-
-    renderer.render_separator()
-
-    renderer.render_menu(
-
-        [
-
-            "Customer",
-
-            "Accounts",
-
-            "Transactions",
-
-            "Reports",
-
-            "Exit",
-
-        ]
-
-    )
-
-    renderer.render_footer()
-
-    captured = capsys.readouterr()
-
-    assert "Customer" in captured.out
-
-    assert "Accounts" in captured.out
-
-    assert "Transactions" in captured.out
-
-    assert "Reports" in captured.out
-
-    assert "Exit" in captured.out
-
-
-def test_renderer_output_not_empty(
-
-    capsys,
-
-):
-
-    renderer = MenuRenderer()
-
-    renderer.render_menu(
-
-        [
-
-            "Exit",
-
-        ]
-
-    )
-
-    captured = capsys.readouterr()
-
-    assert len(
-
-        captured.out.strip()
-
-    ) > 0
-
+    def test_render_table_converts_objects_to_strings(self, renderer, output):
+        renderer.render_table([(1, DecimalLike("10.50"), None)])
+        assert output.getvalue() == "1 | 10.50 | None\n----------\n"
+
+    def test_render_table_accepts_generator(self, renderer, output):
+        rows = ((value,) for value in ["A", "B"])
+        renderer.render_table(rows)
+        assert output.getvalue() == "A\nB\n----------\n"
+
+    def test_render_table_empty_rows_still_renders_separator(self, renderer, output):
+        renderer.render_table([])
+        assert output.getvalue() == "----------\n"
+
+    def test_output_property_returns_configured_stream(self, renderer, output):
+        assert renderer.output is output
+
+    def test_line_width_property_returns_configured_width(self, renderer):
+        assert renderer.line_width == 10
+
+    def test_repr(self, renderer):
+        assert repr(renderer) == "MenuRenderer(line_width=10)"
+
+    def test_str(self, renderer):
+        assert str(renderer) == "CLI Menu Renderer"
+
+    def test_render_heading_uses_exact_line_width(self, renderer, output):
+        renderer.render_heading("X")
+        lines = output.getvalue().splitlines()
+        assert len(lines[1]) == 10
+        assert len(lines[2]) == 10
+        assert len(lines[3]) == 10
+
+    def test_render_separator_uses_exact_line_width(self, renderer, output):
+        renderer.render_separator()
+        assert len(output.getvalue().rstrip("\n")) == 10
+
+    def test_render_menu_uses_exact_line_width_for_heading_and_separator(self, renderer, output):
+        renderer.render_menu(MenuDefinition("X", ()))
+        lines = output.getvalue().splitlines()
+        assert len(lines[1]) == 10
+        assert len(lines[2]) == 10
+        assert len(lines[3]) == 10
+        assert len(lines[4]) == 10
+
+    def test_renderer_can_use_standard_output_stream(self):
+        renderer = MenuRenderer()
+        assert renderer.output is not None
+
+    def test_renderer_can_use_custom_line_width(self):
+        renderer = MenuRenderer(output=StringIO(), line_width=3)
+        renderer.render_separator()
+        assert renderer.output.getvalue() == "---\n"
+
+    def test_message_renderer_preserves_internal_spacing(self, renderer, output):
+        renderer.info("  spaced message  ")
+        assert output.getvalue() == "[INFO]   spaced message  \n"
+
+    def test_render_table_preserves_row_values(self, renderer, output):
+        renderer.render_table([("A", "B", "C")])
+        assert output.getvalue() == "A | B | C\n----------\n"
+
+    def test_render_table_handles_single_column_rows(self, renderer, output):
+        renderer.render_table([("A",), ("B",)])
+        assert output.getvalue() == "A\nB\n----------\n"
+
+    def test_render_table_handles_empty_row(self, renderer, output):
+        renderer.render_table([()])
+        assert output.getvalue() == "\n----------\n"
+
+    def test_render_heading_handles_empty_title(self, renderer, output):
+        renderer.render_heading("")
+        lines = output.getvalue().splitlines()
+        assert lines[2] == "          "
+
+
+class DecimalLike:
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return self.value

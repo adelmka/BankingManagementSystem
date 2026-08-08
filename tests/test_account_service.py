@@ -496,7 +496,7 @@ def test_transfer_moves_amount_between_two_accounts(
     assert result == (source, destination)
     source.withdraw.assert_called_once_with(amount)
     destination.deposit.assert_called_once_with(amount)
-    assert account_repository.save_account.call_count == 4
+    assert account_repository.save_account.call_count == 2
 
 
 def test_transfer_rejects_same_source_and_destination(

@@ -22,6 +22,9 @@ from models.value_objects.address import Address
 from models.value_objects.money import Money
 from repositories.account_repository import AccountRepository
 from repositories.customer_repository import CustomerRepository
+from repositories.transaction_repository import TransactionRepository
+from services.account_service import AccountService
+from services.customer_service import CustomerService
 from utils.constants import CustomerStatus, Gender
 
 
@@ -30,22 +33,43 @@ from utils.constants import CustomerStatus, Gender
 # ============================================================
 
 
-@pytest.fixture(autouse=True)
-def isolate_e2e_storage(tmp_path, monkeypatch):
-    """Give every test a private customer/account CSV store."""
+@pytest.fixture
+def e2e_repositories(tmp_path, monkeypatch):
+    """Build repositories against private CSV files for this test."""
 
-    customer_file = tmp_path / "customers.csv"
-    account_file = tmp_path / "accounts.csv"
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
 
-    monkeypatch.setattr(
-        CustomerRepository,
-        "CSV_FILE",
-        customer_file,
-    )
-    monkeypatch.setattr(
-        AccountRepository,
-        "CSV_FILE",
-        account_file,
+    customer_file = data_dir / "customers.csv"
+    account_file = data_dir / "accounts.csv"
+    transaction_file = data_dir / "transactions.csv"
+
+    monkeypatch.setattr(CustomerRepository, "CSV_FILE", customer_file)
+    monkeypatch.setattr(AccountRepository, "CSV_FILE", account_file)
+    monkeypatch.setattr(TransactionRepository, "CSV_FILE", transaction_file)
+
+    return {
+        "customer": CustomerRepository(),
+        "account": AccountRepository(),
+        "transaction": TransactionRepository(),
+    }
+
+
+@pytest.fixture
+def customer_service(e2e_repositories):
+    """Customer service using only this test's private repository."""
+
+    return CustomerService(e2e_repositories["customer"])
+
+
+@pytest.fixture
+def account_service(e2e_repositories):
+    """Account service using this test's private repositories."""
+
+    return AccountService(
+        account_repository=e2e_repositories["account"],
+        customer_repository=e2e_repositories["customer"],
+        transaction_repository=e2e_repositories["transaction"],
     )
 
 
@@ -164,10 +188,7 @@ def test_bulk_deposit(customer_service, account_service):
     for i in range(10):
         register_customer(customer_service, i)
         open_savings_account(account_service, i, "1000")
-        account_service.deposit(
-            account_number(i),
-            Money("500"),
-        )
+        account_service.deposit(account_number(i), Money("500"))
 
     for i in range(10):
         account = account_service.get_account(account_number(i))
@@ -185,10 +206,7 @@ def test_bulk_withdrawal(customer_service, account_service):
     for i in range(10):
         register_customer(customer_service, i)
         open_savings_account(account_service, i, "1000")
-        account_service.withdraw(
-            account_number(i),
-            Money("250"),
-        )
+        account_service.withdraw(account_number(i), Money("250"))
 
     for i in range(10):
         account = account_service.get_account(account_number(i))
@@ -208,14 +226,8 @@ def test_mixed_operations(customer_service, account_service):
         open_savings_account(account_service, i, "1000")
 
     for i in range(15):
-        account_service.deposit(
-            account_number(i),
-            Money("100"),
-        )
-        account_service.withdraw(
-            account_number(i),
-            Money("50"),
-        )
+        account_service.deposit(account_number(i), Money("100"))
+        account_service.withdraw(account_number(i), Money("50"))
 
     for i in range(15):
         account = account_service.get_account(account_number(i))
@@ -227,19 +239,15 @@ def test_mixed_operations(customer_service, account_service):
 # ============================================================
 
 
-def test_restart_multiple_customers(
-    customer_service,
-    monkeypatch,
-):
+def test_restart_multiple_customers(customer_service, e2e_repositories):
     """Verify that 25 customers can be reloaded from persistent storage."""
 
     for i in range(25):
         register_customer(customer_service, i)
 
-    # Reconstruct a fresh repository against the exact same isolated file.
-    storage_file = customer_service._repository.CSV_FILE
-    monkeypatch.setattr(CustomerRepository, "CSV_FILE", storage_file)
+    storage_file = e2e_repositories["customer"].CSV_FILE
     restarted_repository = CustomerRepository()
+    assert restarted_repository.CSV_FILE == storage_file
 
     for i in range(25):
         customer = restarted_repository.find_by_customer_number(

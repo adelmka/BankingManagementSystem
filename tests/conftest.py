@@ -65,47 +65,80 @@ def temporary_storage(tmp_path):
 
     return tmp_path
 
+@pytest.fixture
+def test_config(temporary_storage):
+    """
+    Configuration isolated to pytest's temporary storage.
+    """
 
-# ================================================================
-# Dependency Container
-# ================================================================
+    class TestConfig:
+        APP_NAME = "Banking Management System"
+        APP_VERSION = "1.0.0"
+
+        TESTING = True
+        DEBUG = True
+
+        BASE_DIR = temporary_storage
+        DATA_DIR = temporary_storage / "data"
+        LOG_DIR = temporary_storage / "logs"
+        STATIC_DIR = temporary_storage / "static"
+        TEMPLATE_DIR = temporary_storage / "templates"
+        DOCUMENTATION_DIR = temporary_storage / "documentation"
+        TEST_DIR = temporary_storage / "tests"
+        BACKUP_DIR = temporary_storage / "backup"
+
+        CUSTOMERS_FILE = DATA_DIR / "customers.csv"
+        ACCOUNTS_FILE = DATA_DIR / "accounts.csv"
+        TRANSACTIONS_FILE = DATA_DIR / "transactions.csv"
+        USERS_FILE = DATA_DIR / "users.csv"
+        EMPLOYEES_FILE = DATA_DIR / "employees.csv"
+        FEES_FILE = DATA_DIR / "fees.csv"
+        INTEREST_FILE = DATA_DIR / "interest_rates.csv"
+        SETTINGS_FILE = DATA_DIR / "settings.csv"
+        AUDIT_FILE = DATA_DIR / "audit_log.csv"
+        BANKS_FILE = DATA_DIR / "banks.csv"
+
+        APPLICATION_LOG = LOG_DIR / "application.log"
+        ERROR_LOG = LOG_DIR / "error.log"
+        AUDIT_LOG = LOG_DIR / "audit.log"
+
+        DEFAULT_CURRENCY = "SAR"
+
+        @classmethod
+        def create_directories(cls):
+            directories = [
+                cls.DATA_DIR,
+                cls.LOG_DIR,
+                cls.STATIC_DIR,
+                cls.TEMPLATE_DIR,
+                cls.DOCUMENTATION_DIR,
+                cls.TEST_DIR,
+                cls.BACKUP_DIR,
+            ]
+
+            for directory in directories:
+                directory.mkdir(
+                    parents=True,
+                    exist_ok=True,
+                )
+
+    return TestConfig
+
+
+# Replace the existing `application` and `container` fixtures in tests/conftest.py
+# with these versions. No production-code change is required.
 
 @pytest.fixture
-def container(
-    temporary_storage,
-) -> DependencyContainer:
-    """
-    Returns a fully initialized DependencyContainer
-    configured to use temporary storage.
-    """
-
-    bootstrap = Bootstrap(
-        storage_directory=temporary_storage,
-    )
-
-    application = bootstrap.initialize()
-
-    return application.container
-
-
-# ================================================================
-# Application
-# ================================================================
-
-@pytest.fixture
-def application(
-    temporary_storage,
-) -> Application:
-    """
-    Returns a fully initialized Application.
-    """
-
-    bootstrap = Bootstrap(
-        storage_directory=temporary_storage,
-    )
-
+def application(test_config) -> Application:
+    """Return a fully initialized Application using the test configuration."""
+    bootstrap = Bootstrap(config=test_config)
     return bootstrap.initialize()
 
+
+@pytest.fixture
+def container(application) -> DependencyContainer:
+    """Return the internally owned dependency container for tests that need it."""
+    return application._container
 
 # ================================================================
 # Services

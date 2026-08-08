@@ -238,6 +238,7 @@ class CustomerCommands:
 
             self.menu_renderer.display_error(
                 str(exc)
+            )
 
 
     def _collect_customer_data(self) -> dict:

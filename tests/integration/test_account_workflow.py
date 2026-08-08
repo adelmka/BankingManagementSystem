@@ -1,505 +1,120 @@
-"""
-============================================================
-Integration Tests
+"""Integration tests for AccountService and account persistence."""
 
-Account Workflow
-
-Verifies interaction between
-
-CustomerService
-↓
-
-AccountService
-↓
-
-Repositories
-↓
-
-CSV Persistence
-
-No mocks are used.
-============================================================
-"""
+from decimal import Decimal
 
 import pytest
 
 from exceptions.banking_exceptions import (
-    AccountNotFoundError,
+    EntityNotFoundError,
     InsufficientFundsError,
     ValidationError,
 )
+from models.savings_account import SavingsAccount
+from models.value_objects.money import Money
+from tests.integration.conftest import make_customer
 
-# ============================================================
-# Helper
-# ============================================================
 
-def create_customer(customer_service):
+def register_customer(customer_service):
+    return customer_service.register_customer(make_customer())
 
-    return customer_service.create_customer(
 
-        customer_id="CUST001",
-
-        first_name="John",
-
-        last_name="Smith",
-
-        email="john@test.com",
-
-        phone="+966501111111",
-
+def open_savings(account_service, customer_id="CUST001", number="SAV001", balance="1000"):
+    return account_service.open_account(
+        SavingsAccount(
+            account_number=number,
+            customer_id=customer_id,
+            opening_balance=Money(balance),
+            interest_rate=Decimal("0.025"),
+            minimum_balance=Money("0"),
+        )
     )
 
-# ============================================================
-# Savings Account
-# ============================================================
 
-def test_open_savings_account(
+def test_open_savings_account(customer_service, account_service):
+    register_customer(customer_service)
+    account = open_savings(account_service)
+    assert account.account_number == "SAV001"
+    assert account.customer_id == "CUST001"
 
-    customer_service,
 
-    account_service,
+def test_get_account(customer_service, account_service):
+    register_customer(customer_service)
+    open_savings(account_service)
+    account = account_service.get_account("SAV001")
+    assert account.account_number == "SAV001"
 
-):
 
-    create_customer(customer_service)
+def test_deposit(customer_service, account_service):
+    register_customer(customer_service)
+    open_savings(account_service)
+    account_service.deposit("SAV001", Money("500"))
+    assert account_service.balance("SAV001").amount == Decimal("1500.00")
 
-    account = account_service.open_savings_account(
 
-        customer_id="CUST001",
+def test_withdraw(customer_service, account_service):
+    register_customer(customer_service)
+    open_savings(account_service)
+    account_service.withdraw("SAV001", Money("300"))
+    assert account_service.balance("SAV001").amount == Decimal("700.00")
 
+
+def test_transfer(customer_service, account_service):
+    register_customer(customer_service)
+    open_savings(account_service, number="SAV001", balance="1000")
+    open_savings(account_service, number="SAV002", balance="500")
+    account_service.transfer("SAV001", "SAV002", Money("250"))
+    assert account_service.balance("SAV001").amount == Decimal("750.00")
+    assert account_service.balance("SAV002").amount == Decimal("750.00")
+
+
+def test_customer_accounts(customer_service, account_service):
+    register_customer(customer_service)
+    open_savings(account_service, number="SAV001")
+    open_savings(account_service, number="SAV002")
+    accounts = account_service.customer_accounts("CUST001")
+    assert len(accounts) == 2
+    assert account_service.customer_account_count("CUST001") == 2
+
+
+def test_invalid_account(customer_service, account_service):
+    register_customer(customer_service)
+    invalid = SavingsAccount(
         account_number="SAV001",
-
-        opening_balance=1000,
-
+        customer_id="CUST001",
+        opening_balance=Money("1000"),
+        interest_rate=Decimal("0.025"),
+        minimum_balance=Money("0"),
     )
+    invalid._account_number = ""
+    with pytest.raises(ValidationError):
+        account_service.open_account(invalid)
 
-    assert account.account_number == "SAV001"
 
-# ============================================================
-# Find Account
-# ============================================================
+def test_insufficient_funds(customer_service, account_service):
+    register_customer(customer_service)
+    open_savings(account_service, balance="100")
+    with pytest.raises(InsufficientFundsError):
+        account_service.withdraw("SAV001", Money("500"))
 
-def test_find_account(
 
-    customer_service,
-
-    account_service,
-
-):
-
-    create_customer(customer_service)
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        1000,
-
-    )
-
-    account = account_service.find_account(
-
-        "SAV001"
-
-    )
-
-    assert account.account_number == "SAV001"
-
-# ============================================================
-# Deposit
-# ============================================================
-
-def test_deposit(
-
-    customer_service,
-
-    account_service,
-
-):
-
-    create_customer(customer_service)
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        1000,
-
-    )
-
-    account_service.deposit(
-
-        "SAV001",
-
-        500,
-
-    )
-
-    balance = account_service.get_balance(
-
-        "SAV001"
-
-    )
-
-    assert balance == 1500
-
-# ============================================================
-# Withdraw
-# ============================================================
-
-def test_withdraw(
-
-    customer_service,
-
-    account_service,
-
-):
-
-    create_customer(customer_service)
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        1000,
-
-    )
-
-    account_service.withdraw(
-
-        "SAV001",
-
-        300,
-
-    )
-
-    balance = account_service.get_balance(
-
-        "SAV001"
-
-    )
-
-    assert balance == 700
-
-# ============================================================
-# Transfer
-# ============================================================
-
-def test_transfer(
-
-    customer_service,
-
-    account_service,
-
-):
-
-    create_customer(customer_service)
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        1000,
-
-    )
-
-    account_service.open_current_account(
-
-        "CUST001",
-
-        "CUR001",
-
-        500,
-
-    )
-
-    account_service.transfer(
-
-        "SAV001",
-
-        "CUR001",
-
-        250,
-
-    )
-
-    assert (
-
-        account_service.get_balance(
-
-            "SAV001"
-
-        )
-
-        == 750
-
-    )
-
-    assert (
-
-        account_service.get_balance(
-
-            "CUR001"
-
-        )
-
-        == 750
-
-    )
-
-# ============================================================
-# Close Account
-# ============================================================
-
-def test_close_account(
-
-    customer_service,
-
-    account_service,
-
-):
-
-    create_customer(customer_service)
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        1000,
-
-    )
-
-    account_service.close_account(
-
-        "SAV001"
-
-    )
-
-    with pytest.raises(
-
-        AccountNotFoundError
-
-    ):
-
-        account_service.find_account(
-
-            "SAV001"
-
-        )
-
-# ============================================================
-# Validation
-# ============================================================
-
-def test_invalid_account(
-
-    customer_service,
-
-    account_service,
-
-):
-
-    create_customer(customer_service)
-
-    with pytest.raises(
-
-        ValidationError
-
-    ):
-
-        account_service.open_savings_account(
-
-            "CUST001",
-
-            "",
-
-            1000,
-
-        )
-
-# ============================================================
-# Insufficient Funds
-# ============================================================
-
-def test_insufficient_funds(
-
-    customer_service,
-
-    account_service,
-
-):
-
-    create_customer(customer_service)
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        100,
-
-    )
-
-    with pytest.raises(
-
-        InsufficientFundsError
-
-    ):
-
-        account_service.withdraw(
-
-            "SAV001",
-
-            500,
-
-        )
-
-# ============================================================
-# Persistence
-# ============================================================
-
-def test_account_persistence(
-
-    customer_service,
-
-    account_service,
-
-    reload_account_repository,
-
-):
-
-    create_customer(customer_service)
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        1000,
-
-    )
-
+def test_account_persistence(customer_service, account_service, reload_account_repository):
+    register_customer(customer_service)
+    open_savings(account_service)
     repository = reload_account_repository()
-
-    account = repository.find_by_account_number(
-
-        "SAV001"
-
-    )
-
+    account = repository.find_by_account_number("SAV001")
+    assert account is not None
     assert account.account_number == "SAV001"
 
-# ============================================================
-# Repository Restart
-# ============================================================
 
-def test_account_repository_restart(
+def test_account_restart(customer_service, account_service, reload_account_repository):
+    register_customer(customer_service)
+    open_savings(account_service, number="SAV001", balance="2000")
+    restarted = reload_account_repository()
+    account = restarted.find_by_account_number("SAV001")
+    assert account is not None
+    assert account.balance.amount == Decimal("2000.00")
 
-    customer_service,
 
-    account_service,
-
-    reload_account_repository,
-
-):
-
-    create_customer(customer_service)
-
-    account_service.open_current_account(
-
-        "CUST001",
-
-        "CUR001",
-
-        2000,
-
-    )
-
-    repository = reload_account_repository()
-
-    account = repository.find_by_account_number(
-
-        "CUR001"
-
-    )
-
-    assert account.account_number == "CUR001"
-
-# ============================================================
-# Complete Lifecycle
-# ============================================================
-
-def test_account_lifecycle(
-
-    customer_service,
-
-    account_service,
-
-):
-
-    create_customer(customer_service)
-
-    account_service.open_savings_account(
-
-        "CUST001",
-
-        "SAV001",
-
-        1000,
-
-    )
-
-    account_service.deposit(
-
-        "SAV001",
-
-        500,
-
-    )
-
-    account_service.withdraw(
-
-        "SAV001",
-
-        200,
-
-    )
-
-    balance = account_service.get_balance(
-
-        "SAV001"
-
-    )
-
-    assert balance == 1300
-
-    account_service.close_account(
-
-        "SAV001"
-
-    )
-
-    with pytest.raises(
-
-        AccountNotFoundError
-
-    ):
-
-        account_service.find_account(
-
-            "SAV001"
-
-        )
-
+def test_missing_account(account_service):
+    with pytest.raises(EntityNotFoundError):
+        account_service.get_account("UNKNOWN")

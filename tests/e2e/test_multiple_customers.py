@@ -29,19 +29,29 @@ from utils.constants import CustomerStatus, Gender
 # ============================================================
 
 
+def customer_number(index: int) -> str:
+    """Return a test-specific customer number that cannot collide with fixtures."""
+
+    return f"E2EMC{index:03}"
+
+
+def account_number(index: int) -> str:
+    """Return a test-specific account number that cannot collide with fixtures."""
+
+    return f"E2ESA{index:03}"
+
+
 def make_customer(index: int) -> Customer:
     """Build a complete, unique customer using the current domain model."""
 
-    customer_id = f"CUST{index:03}"
-
     return Customer(
-        customer_id=customer_id,
+        customer_id=customer_number(index),
         first_name=f"First{index}",
         last_name=f"Last{index}",
         date_of_birth=date(1990, 1, 15),
         gender=Gender.MALE,
         national_id=f"100000000{index:03}",
-        email=f"user{index}@bank.com",
+        email=f"e2e-multiple-{index}@bank.com",
         phone_number=f"+966501000{index:03}",
         address=Address(
             address_line_1="123 Main Street",
@@ -61,9 +71,7 @@ def make_customer(index: int) -> Customer:
 def register_customer(customer_service, index: int) -> Customer:
     """Register a complete customer through the current service API."""
 
-    return customer_service.register_customer(
-        make_customer(index)
-    )
+    return customer_service.register_customer(make_customer(index))
 
 
 def open_savings_account(
@@ -74,8 +82,8 @@ def open_savings_account(
     """Open a savings account through the current account-service API."""
 
     account = SavingsAccount(
-        account_number=f"SAV{index:03}",
-        customer_id=f"CUST{index:03}",
+        account_number=account_number(index),
+        customer_id=customer_number(index),
         opening_balance=Money(opening_balance),
         interest_rate=Decimal("0.025"),
         minimum_balance=Money("0"),
@@ -96,9 +104,9 @@ def test_create_multiple_customers(customer_service):
         register_customer(customer_service, i)
 
     for i in range(100):
-        customer = customer_service.find_customer(f"CUST{i:03}")
+        customer = customer_service.find_customer(customer_number(i))
         assert customer is not None
-        assert customer.customer_id == f"CUST{i:03}"
+        assert customer.customer_id == customer_number(i)
 
 
 # ============================================================
@@ -114,9 +122,9 @@ def test_multiple_accounts(customer_service, account_service):
         open_savings_account(account_service, i, "1000")
 
     for i in range(20):
-        account = account_service.get_account(f"SAV{i:03}")
-        assert account.account_number == f"SAV{i:03}"
-        assert account.customer_id == f"CUST{i:03}"
+        account = account_service.get_account(account_number(i))
+        assert account.account_number == account_number(i)
+        assert account.customer_id == customer_number(i)
 
 
 # ============================================================
@@ -131,12 +139,12 @@ def test_bulk_deposit(customer_service, account_service):
         register_customer(customer_service, i)
         open_savings_account(account_service, i, "1000")
         account_service.deposit(
-            f"SAV{i:03}",
+            account_number(i),
             Money("500"),
         )
 
     for i in range(10):
-        account = account_service.get_account(f"SAV{i:03}")
+        account = account_service.get_account(account_number(i))
         assert account.balance.amount == Decimal("1500.00")
 
 
@@ -152,12 +160,12 @@ def test_bulk_withdrawal(customer_service, account_service):
         register_customer(customer_service, i)
         open_savings_account(account_service, i, "1000")
         account_service.withdraw(
-            f"SAV{i:03}",
+            account_number(i),
             Money("250"),
         )
 
     for i in range(10):
-        account = account_service.get_account(f"SAV{i:03}")
+        account = account_service.get_account(account_number(i))
         assert account.balance.amount == Decimal("750.00")
 
 
@@ -175,16 +183,16 @@ def test_mixed_operations(customer_service, account_service):
 
     for i in range(15):
         account_service.deposit(
-            f"SAV{i:03}",
+            account_number(i),
             Money("100"),
         )
         account_service.withdraw(
-            f"SAV{i:03}",
+            account_number(i),
             Money("50"),
         )
 
     for i in range(15):
-        account = account_service.get_account(f"SAV{i:03}")
+        account = account_service.get_account(account_number(i))
         assert account.balance.amount == Decimal("1050.00")
 
 
@@ -209,10 +217,10 @@ def test_restart_multiple_customers(
 
     for i in range(25):
         customer = restarted_repository.find_by_customer_number(
-            f"CUST{i:03}"
+            customer_number(i)
         )
         assert customer is not None
-        assert customer.customer_id == f"CUST{i:03}"
+        assert customer.customer_id == customer_number(i)
 
 
 # ============================================================
@@ -228,5 +236,5 @@ def test_large_bank_dataset(customer_service, account_service):
         open_savings_account(account_service, i, "100")
 
     for i in range(100):
-        account = account_service.get_account(f"SAV{i:03}")
-        assert account.customer_id == f"CUST{i:03}"
+        account = account_service.get_account(account_number(i))
+        assert account.customer_id == customer_number(i)

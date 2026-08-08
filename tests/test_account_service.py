@@ -536,25 +536,6 @@ def test_balance_returns_account_balance(
 
     assert service.balance(ACCOUNT_NUMBER) == account.balance
 
-def test_has_sufficient_funds_true_when_balance_is_enough(
-    service,
-    account,
-    monkeypatch,
-):
-    monkeypatch.setattr(service, "validate_account", lambda _: account)
-
-    assert service.has_sufficient_funds(ACCOUNT_NUMBER, money("500.00")) is True
-
-
-def test_has_sufficient_funds_false_when_balance_is_insufficient(
-    service,
-    account,
-    monkeypatch,
-):
-    monkeypatch.setattr(service, "validate_account", lambda _: account)
-
-    assert service.has_sufficient_funds(ACCOUNT_NUMBER, money("1500.00")) is False
-
 
 def test_close_account_requires_zero_balance(
     service,

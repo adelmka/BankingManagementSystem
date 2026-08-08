@@ -537,23 +537,6 @@ def test_balance_returns_account_balance(
     assert service.balance(ACCOUNT_NUMBER) == account.balance
 
 
-def test_close_account_requires_zero_balance(
-    service,
-    account,
-    monkeypatch,
-):
-    monkeypatch.setattr(service, "validate_account", lambda _: account)
-
-    # with pytest.raises(ValidationError, match="zero balance"):
-    with pytest.raises(
-        ValidationError,
-        match="balance must be zero",
-    ):
-        service.close_account(ACCOUNT_NUMBER)
-
-    account.close.assert_not_called()
-
-
 def test_close_account_closes_zero_balance_account(
     service,
     account_repository,

@@ -1,533 +1,125 @@
-"""
-============================================================
-Integration Tests
+"""Integration tests for TransactionService and transaction persistence."""
 
-Transaction Workflow
-
-Verifies
-
-TransactionService
-↓
-
-AccountService
-↓
-
-Repositories
-↓
-
-CSV Persistence
-
-No mocks are used.
-============================================================
-"""
+from decimal import Decimal
 
 import pytest
 
 from exceptions.banking_exceptions import (
-    AccountNotFoundError,
-    InsufficientFundsError,
+    EntityNotFoundError,
     ValidationError,
 )
-
-# ============================================================
-# Test Data
-# ============================================================
-
-def setup_accounts(
-
-    customer_service,
-
-    account_service,
-
-):
-
-    customer_service.create_customer(
-
-        customer_id="CUST001",
-
-        first_name="John",
-
-        last_name="Smith",
-
-        email="john@test.com",
-
-        phone="+966501111111",
-
-    )
-
-    account_service.open_savings_account(
-
-        customer_id="CUST001",
-
-        account_number="SAV001",
-
-        opening_balance=1000,
-
-    )
-
-    account_service.open_current_account(
-
-        customer_id="CUST001",
-
-        account_number="CUR001",
-
-        opening_balance=500,
-
-    )
-
-# ============================================================
-# Deposit Workflow
-# ============================================================
-
-def test_deposit_workflow(
-
-    customer_service,
-
-    account_service,
-
-    transaction_service,
-
-):
-
-    setup_accounts(
-
-        customer_service,
-
-        account_service,
-
-    )
-
-    transaction_service.deposit(
-
-        "SAV001",
-
-        250,
-
-    )
-
-    balance = account_service.get_balance(
-
-        "SAV001"
-
-    )
-
-    assert balance == 1250
-
-# ============================================================
-# Withdrawal Workflow
-# ============================================================
-
-def test_withdraw_workflow(
-
-    customer_service,
-
-    account_service,
-
-    transaction_service,
-
-):
-
-    setup_accounts(
-
-        customer_service,
-
-        account_service,
-
-    )
-
-    transaction_service.withdraw(
-
-        "SAV001",
-
-        400,
-
-    )
-
-    balance = account_service.get_balance(
-
-        "SAV001"
-
-    )
-
-    assert balance == 600
-
-# ============================================================
-# Transfer Workflow
-# ============================================================
-
-def test_transfer_workflow(
-
-    customer_service,
-
-    account_service,
-
-    transaction_service,
-
-):
-
-    setup_accounts(
-
-        customer_service,
-
-        account_service,
-
-    )
-
-    transaction_service.transfer(
-
-        "SAV001",
-
-        "CUR001",
-
-        300,
-
-    )
-
-    assert (
-
-        account_service.get_balance(
-
-            "SAV001"
-
+from models.savings_account import SavingsAccount
+from models.transaction import Transaction
+from models.value_objects.money import Money
+from utils.constants import TransactionType
+from tests.integration.conftest import make_customer
+
+
+def setup_account(customer_service, account_service):
+    customer_service.register_customer(make_customer())
+    account_service.open_account(
+        SavingsAccount(
+            account_number="SAV001",
+            customer_id="CUST001",
+            opening_balance=Money("1000"),
+            interest_rate=Decimal("0.025"),
+            minimum_balance=Money("0"),
         )
-
-        == 700
-
     )
 
-    assert (
 
-        account_service.get_balance(
-
-            "CUR001"
-
-        )
-
-        == 800
-
+def make_transaction(number="TXN001", amount="250"):
+    return Transaction(
+        transaction_number=number,
+        transaction_type=TransactionType.DEPOSIT,
+        amount=Money(amount),
+        source_account=None,
+        destination_account="SAV001",
+        initiated_by="integration-test",
+        description="Integration test deposit",
     )
 
-# ============================================================
-# Multiple Transactions
-# ============================================================
 
-def test_multiple_transactions(
+def test_record_transaction(customer_service, account_service, transaction_service):
+    setup_account(customer_service, account_service)
+    transaction = transaction_service.record_transaction(make_transaction())
+    assert transaction.transaction_number == "TXN001"
+    assert transaction.is_completed()
 
-    customer_service,
 
-    account_service,
+def test_get_transaction(customer_service, account_service, transaction_service):
+    setup_account(customer_service, account_service)
+    transaction_service.record_transaction(make_transaction())
+    transaction = transaction_service.get_transaction("TXN001")
+    assert transaction.amount.amount == Decimal("250.00")
 
-    transaction_service,
 
-):
+def test_all_transactions(customer_service, account_service, transaction_service):
+    setup_account(customer_service, account_service)
+    transaction_service.record_transaction(make_transaction("TXN001", "100"))
+    transaction_service.record_transaction(make_transaction("TXN002", "200"))
+    assert transaction_service.transaction_count() == 2
+    assert len(transaction_service.all_transactions()) == 2
 
-    setup_accounts(
 
-        customer_service,
+def test_account_transactions(customer_service, account_service, transaction_service):
+    setup_account(customer_service, account_service)
+    transaction_service.record_transaction(make_transaction())
+    transactions = transaction_service.account_transactions("SAV001")
+    assert len(transactions) == 1
+    assert transactions[0].transaction_number == "TXN001"
 
-        account_service,
 
-    )
+def test_customer_transactions(customer_service, account_service, transaction_service):
+    setup_account(customer_service, account_service)
+    transaction_service.record_transaction(make_transaction())
+    transactions = transaction_service.customer_transactions("CUST001")
+    assert len(transactions) == 1
 
-    transaction_service.deposit(
 
-        "SAV001",
+def test_transaction_statistics(customer_service, account_service, transaction_service):
+    setup_account(customer_service, account_service)
+    transaction_service.record_transaction(make_transaction("TXN001", "100"))
+    transaction_service.record_transaction(make_transaction("TXN002", "300"))
+    statistics = transaction_service.account_statistics("SAV001")
+    assert statistics["transaction_count"] == 2
+    assert statistics["total_credits"].amount == Decimal("400.00")
 
-        200,
-
-    )
-
-    transaction_service.withdraw(
-
-        "SAV001",
-
-        150,
-
-    )
-
-    transaction_service.deposit(
-
-        "CUR001",
-
-        500,
-
-    )
-
-    transaction_service.transfer(
-
-        "CUR001",
-
-        "SAV001",
-
-        100,
-
-    )
-
-    assert (
-
-        account_service.get_balance(
-
-            "SAV001"
-
-        )
-
-        == 1150
-
-    )
-
-    assert (
-
-        account_service.get_balance(
-
-            "CUR001"
-
-        )
-
-        == 900
-
-    )
-
-# ============================================================
-# Insufficient Funds
-# ============================================================
-
-def test_insufficient_funds(
-
-    customer_service,
-
-    account_service,
-
-    transaction_service,
-
-):
-
-    setup_accounts(
-
-        customer_service,
-
-        account_service,
-
-    )
-
-    with pytest.raises(
-
-        InsufficientFundsError
-
-    ):
-
-        transaction_service.withdraw(
-
-            "CUR001",
-
-            5000,
-
-        )
-
-# ============================================================
-# Unknown Account
-# ============================================================
-
-def test_unknown_account(
-
-    transaction_service,
-
-):
-
-    with pytest.raises(
-
-        AccountNotFoundError
-
-    ):
-
-        transaction_service.deposit(
-
-            "UNKNOWN",
-
-            100,
-
-        )
-
-# ============================================================
-# Validation
-# ============================================================
-
-def test_invalid_transaction(
-
-    customer_service,
-
-    account_service,
-
-    transaction_service,
-
-):
-
-    setup_accounts(
-
-        customer_service,
-
-        account_service,
-
-    )
-
-    with pytest.raises(
-
-        ValidationError
-
-    ):
-
-        transaction_service.deposit(
-
-            "SAV001",
-
-            -100,
-
-        )
-
-# ============================================================
-# Transaction Persistence
-# ============================================================
 
 def test_transaction_persistence(
-
     customer_service,
-
     account_service,
-
     transaction_service,
-
     reload_transaction_repository,
-
 ):
-
-    setup_accounts(
-
-        customer_service,
-
-        account_service,
-
-    )
-
-    transaction_service.deposit(
-
-        "SAV001",
-
-        250,
-
-    )
-
+    setup_account(customer_service, account_service)
+    transaction_service.record_transaction(make_transaction())
     repository = reload_transaction_repository()
-
-    transactions = repository.get_all()
-
+    transactions = list(repository)
     assert len(transactions) == 1
+    assert transactions[0].transaction_number == "TXN001"
 
-# ============================================================
-# Repository Restart
-# ============================================================
 
-def test_transaction_repository_restart(
-
+def test_transaction_restart(
     customer_service,
-
     account_service,
-
     transaction_service,
-
     reload_transaction_repository,
-
 ):
+    setup_account(customer_service, account_service)
+    transaction_service.record_transaction(make_transaction())
+    restarted = reload_transaction_repository()
+    transaction_service.refresh()
+    assert restarted.transaction_exists("TXN001")
 
-    setup_accounts(
 
-        customer_service,
+def test_unknown_account(transaction_service):
+    with pytest.raises(EntityNotFoundError):
+        transaction_service.account_transactions("UNKNOWN")
 
-        account_service,
 
-    )
-
-    transaction_service.withdraw(
-
-        "SAV001",
-
-        100,
-
-    )
-
-    repository = reload_transaction_repository()
-
-    transactions = repository.get_all()
-
-    assert len(transactions) == 1
-
-# ============================================================
-# Complete Transaction Lifecycle
-# ============================================================
-
-def test_transaction_lifecycle(
-
-    customer_service,
-
-    account_service,
-
-    transaction_service,
-
-):
-
-    setup_accounts(
-
-        customer_service,
-
-        account_service,
-
-    )
-
-    transaction_service.deposit(
-
-        "SAV001",
-
-        500,
-
-    )
-
-    transaction_service.withdraw(
-
-        "SAV001",
-
-        200,
-
-    )
-
-    transaction_service.transfer(
-
-        "SAV001",
-
-        "CUR001",
-
-        300,
-
-    )
-
-    assert (
-
-        account_service.get_balance(
-
-            "SAV001"
-
-        )
-
-        == 1000
-
-    )
-
-    assert (
-
-        account_service.get_balance(
-
-            "CUR001"
-
-        )
-
-        == 800
-
-    )
-
+def test_invalid_transaction(transaction_service):
+    invalid = make_transaction()
+    invalid._amount = Money("-100")
+    with pytest.raises(ValidationError):
+        transaction_service.record_transaction(invalid)

@@ -4,9 +4,9 @@ A Python-based Banking Management System (BMS) implementing core retail-banking 
 
 ## Project Status
 
-**Current status: Functionally validated**
+**Current status: Functionally validated and documentation-complete**
 
-The current test suite contains **1,439 tests**, and the complete suite passes:
+The current local test-suite baseline contains **1,439 tests**, and the complete suite passes:
 
 ```text
 1,439 passed in 10.35s
@@ -18,7 +18,7 @@ The dedicated reporting suite also passes independently:
 70 passed in 0.55s
 ```
 
-These results represent the current local validation baseline and should be preserved while documentation is completed.
+These results represent the current local validation baseline. The documentation set has now been completed and cross-checked against the repository structure and implementation.
 
 ## Key Capabilities
 
@@ -80,7 +80,7 @@ BankingManagementSystem/
 └── docs/                # Project documentation
 ```
 
-The exact implementation remains the authoritative source for module names and APIs. Documentation is being completed from the validated current codebase rather than from an earlier design draft.
+The exact implementation remains the authoritative source for module names and APIs. Documentation is derived from the validated current codebase rather than from an earlier design draft.
 
 ## Configuration
 
@@ -130,12 +130,10 @@ Install the dependencies:
 
 ```powershell
 python -m pip install --upgrade pip
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
-Create the required application directories using the configuration/bootstrap facilities provided by the project before first use, as applicable to the selected application entry point.
-
-Detailed installation procedures will be maintained in [`docs/installation/INSTALLATION_GUIDE.md`](docs/installation/INSTALLATION_GUIDE.md).
+Detailed installation procedures are maintained in [`docs/installation/INSTALLATION_GUIDE.md`](docs/installation/INSTALLATION_GUIDE.md).
 
 ## Running Tests
 
@@ -161,7 +159,7 @@ pytest tests/test_customer_service.py -v
 pytest tests/test_transaction_service.py -v
 ```
 
-The full test suite is the primary functional validation baseline. Documentation work should not require changes to production behavior simply to accommodate documentation.
+The full test suite is the primary functional validation baseline.
 
 ## Test Coverage Areas
 
@@ -190,24 +188,25 @@ The reporting subsystem is independently validated by 70 passing tests covering:
 
 ## Documentation
 
-The project documentation is being completed as a dedicated documentation phase. The planned deliverables are:
+The documentation set is complete and is organized as follows:
 
 | Document | Location | Status |
 |---|---|---|
 | README | `README.md` | Complete |
-| Architecture Guide | `docs/architecture/ARCHITECTURE_GUIDE.md` | Planned |
-| User Guide | `docs/user/USER_GUIDE.md` | Planned |
-| Developer Guide | `docs/developer/DEVELOPER_GUIDE.md` | Planned |
-| Installation Guide | `docs/installation/INSTALLATION_GUIDE.md` | Planned |
-| API Reference | `docs/api/API_REFERENCE.md` | Planned |
-| Class Diagrams | `docs/diagrams/CLASS_DIAGRAMS.md` | Planned |
-| Sequence Diagrams | `docs/diagrams/SEQUENCE_DIAGRAMS.md` | Planned |
+| Architecture Guide | `docs/architecture/ARCHITECTURE_GUIDE.md` | Complete |
+| User Guide | `docs/user/USER_GUIDE.md` | Complete |
+| Developer Guide | `docs/developer/DEVELOPER_GUIDE.md` | Complete |
+| Installation Guide | `docs/installation/INSTALLATION_GUIDE.md` | Complete |
+| API Reference | `docs/api/API_REFERENCE.md` | Complete |
+| Class Diagrams | `docs/diagrams/CLASS_DIAGRAMS.md` | Complete |
+| Sequence Diagrams | `docs/diagrams/SEQUENCE_DIAGRAMS.md` | Complete |
+| Documentation Validation | `docs/validation/DOCUMENTATION_VALIDATION.md` | Complete |
 
-The documentation will be derived from the current repository implementation and validated against the test suite. It will not introduce architectural changes to the application.
+All documentation is intended to describe the implementation that exists in the repository. It does not introduce architectural changes or document deferred functionality as implemented.
 
 ## Design Approach
 
-The project uses object-oriented programming and separation of responsibilities across the application. The documentation phase will provide the definitive description of the implemented architecture, including:
+The project uses object-oriented programming and separation of responsibilities across the application. The documentation set describes the implemented architecture, including:
 
 - Encapsulation
 - Abstraction
@@ -233,8 +232,6 @@ The application configuration currently identifies the application version as **
 
 ## Development Principles
 
-While completing the documentation and final review:
-
 1. Preserve the existing architecture unless a verified defect requires a change.
 2. Treat the passing test suite as the current functional baseline.
 3. Document the implementation that actually exists in the repository.
@@ -247,16 +244,16 @@ No project license has been specified in the repository documentation at this st
 
 ## Documentation Roadmap
 
-The documentation phase will proceed in this order:
+The documentation phase is complete:
 
 1. README — project entry point and documentation index
 2. Architecture Guide — architecture, layers, responsibilities, and design decisions
-3. Installation Guide — environment and setup procedures
-4. User Guide — operational workflows
-5. Developer Guide — development and extension guidance
+3. User Guide — operational workflows
+4. Developer Guide — development and extension guidance
+5. Installation Guide — environment and setup procedures
 6. API Reference — public classes, services, repositories, and interfaces
 7. Class Diagrams — static system/domain relationships
 8. Sequence Diagrams — major runtime workflows
-9. Documentation validation — consistency check against the current source and tests
+9. Documentation Validation — consistency check against the current source and test baseline
 
-After documentation validation, the project can proceed to the independent final project audit.
+The next project activity can be the independent final project audit, if desired.

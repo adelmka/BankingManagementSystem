@@ -34,203 +34,93 @@ from cli.menu import MenuDefinition
 
 
 class MenuRenderer:
-    """
-    Renders all console output for the CLI.
-    """
+    """Renders all console output for the CLI."""
 
-    #################################################################
-    # Construction
-    #################################################################
-
-    def __init__(
-        self,
-        output: TextIO = sys.stdout,
-        line_width: int = 70,
-    ) -> None:
-        """
-        Initialize the renderer.
-
-        Parameters
-        ----------
-        output
-            Output stream.
-
-        line_width
-            Width used for separators and headings.
-        """
-
+    def __init__(self, output: TextIO = sys.stdout, line_width: int = 70) -> None:
         self._output = output
         self._line_width = line_width
 
-    #################################################################
-    # Internal Utilities
-    #################################################################
+    def _write(self, text: str = "") -> None:
+        print(text, file=self._output)
 
-    def _write(
-        self,
-        text: str = "",
-    ) -> None:
-        """
-        Write a line to the configured output stream.
-        """
-
-        print(
-            text,
-            file=self._output,
-        )
-
-    #################################################################
-    # Headings
-    #################################################################
-
-    def render_heading(
-        self,
-        title: str,
-    ) -> None:
-        """
-        Render a section heading.
-        """
-
+    def render_heading(self, title: str) -> None:
         self._write()
         self._write("=" * self._line_width)
         self._write(title.center(self._line_width))
         self._write("=" * self._line_width)
 
-    #################################################################
-    # Separators
-    #################################################################
-
     def render_separator(self) -> None:
-        """
-        Render a horizontal separator.
-        """
-
         self._write("-" * self._line_width)
 
-    #################################################################
-    # Menus
-    #################################################################
-
-    def render_menu(
-        self,
-        menu: MenuDefinition,
-    ) -> None:
-        """
-        Render a complete menu.
-        """
-
+    def render_menu(self, menu: MenuDefinition) -> None:
         self.render_heading(menu.title)
-
         for option in menu.options:
-            self._write(
-                f"{option.key:>2}. {option.description}"
-            )
-
+            self._write(f"{option.key:>2}. {option.description}")
         self.render_separator()
 
-    #################################################################
-    # Messages
-    #################################################################
-
-    def info(
-        self,
-        message: str,
-    ) -> None:
-        """
-        Render an informational message.
-        """
-
+    def info(self, message: str) -> None:
         self._write(f"[INFO] {message}")
 
-    def success(
-        self,
-        message: str,
-    ) -> None:
-        """
-        Render a success message.
-        """
-
+    def success(self, message: str) -> None:
         self._write(f"[SUCCESS] {message}")
 
-    def warning(
-        self,
-        message: str,
-    ) -> None:
-        """
-        Render a warning message.
-        """
-
+    def warning(self, message: str) -> None:
         self._write(f"[WARNING] {message}")
 
-    def error(
-        self,
-        message: str,
-    ) -> None:
-        """
-        Render an error message.
-        """
-
+    def error(self, message: str) -> None:
         self._write(f"[ERROR] {message}")
 
-    #################################################################
-    # Tables
-    #################################################################
-
-    def render_table(
-        self,
-        rows: Iterable[Iterable[object]],
-    ) -> None:
-        """
-        Render a simple text table.
-        """
-
+    def render_table(self, rows: Iterable[Iterable[object]]) -> None:
         for row in rows:
-            self._write(
-                " | ".join(
-                    str(column)
-                    for column in row
-                )
-            )
-
+            self._write(" | ".join(str(column) for column in row))
         self.render_separator()
 
     #################################################################
-    # Properties
+    # Command Adapter Compatibility
     #################################################################
+
+    def display_message(self, message: object) -> None:
+        """Compatibility alias for informational command output."""
+        self.info(str(message))
+
+    def display_success(self, message: object) -> None:
+        """Compatibility alias for successful command output."""
+        self.success(str(message))
+
+    def display_warning(self, message: object) -> None:
+        """Compatibility alias for warning command output."""
+        self.warning(str(message))
+
+    def display_error(self, message: object) -> None:
+        """Compatibility alias for error command output."""
+        self.error(str(message))
+
+    def display_object(self, value: object) -> None:
+        """Display one object using its string representation."""
+        self._write(str(value))
+
+    def display_list(self, values: Iterable[object]) -> None:
+        """Display a sequence of values, one item per line."""
+        for value in values:
+            self._write(str(value))
+
+    def display_main_menu(self, menu: MenuDefinition | None = None) -> None:
+        """Render the supplied main menu, defaulting to the project menu."""
+        if menu is None:
+            from cli.menu import MAIN_MENU
+            menu = MAIN_MENU
+        self.render_menu(menu)
 
     @property
     def output(self) -> TextIO:
-        """
-        Return the configured output stream.
-        """
-
         return self._output
 
     @property
     def line_width(self) -> int:
-        """
-        Return the configured line width.
-        """
-
         return self._line_width
 
-    #################################################################
-    # Representation
-    #################################################################
-
     def __repr__(self) -> str:
-        """
-        Developer-friendly representation.
-        """
-
-        return (
-            f"{self.__class__.__name__}"
-            f"(line_width={self._line_width})"
-        )
+        return f"{self.__class__.__name__}(line_width={self._line_width})"
 
     def __str__(self) -> str:
-        """
-        Human-readable representation.
-        """
-
         return "CLI Menu Renderer"

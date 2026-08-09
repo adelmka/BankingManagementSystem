@@ -45,7 +45,6 @@ class InputHandler:
         self,
         renderer: MenuRenderer,
     ) -> None:
-
         self._renderer = renderer
 
     #################################################################
@@ -58,23 +57,14 @@ class InputHandler:
         *,
         required: bool = True,
     ) -> str:
-        """
-        Read a string from the user.
-        """
-
+        """Read a string from the user."""
         while True:
-
             value = input(f"{prompt}: ").strip()
-
             if value:
                 return value
-
             if not required:
                 return ""
-
-            self._renderer.error(
-                "Input cannot be empty."
-            )
+            self._renderer.error("Input cannot be empty.")
 
     #################################################################
     # Integer Input
@@ -87,41 +77,20 @@ class InputHandler:
         minimum: int | None = None,
         maximum: int | None = None,
     ) -> int:
-        """
-        Read an integer.
-        """
-
+        """Read an integer."""
         while True:
-
             value = input(f"{prompt}: ").strip()
-
             try:
                 number = int(value)
-
             except ValueError:
-
-                self._renderer.error(
-                    "Please enter a valid integer."
-                )
-
+                self._renderer.error("Please enter a valid integer.")
                 continue
-
             if minimum is not None and number < minimum:
-
-                self._renderer.error(
-                    f"Value must be at least {minimum}."
-                )
-
+                self._renderer.error(f"Value must be at least {minimum}.")
                 continue
-
             if maximum is not None and number > maximum:
-
-                self._renderer.error(
-                    f"Value must not exceed {maximum}."
-                )
-
+                self._renderer.error(f"Value must not exceed {maximum}.")
                 continue
-
             return number
 
     #################################################################
@@ -135,42 +104,20 @@ class InputHandler:
         minimum: Decimal | None = None,
         maximum: Decimal | None = None,
     ) -> Decimal:
-        """
-        Read a decimal value.
-        """
-
+        """Read a decimal value."""
         while True:
-
             value = input(f"{prompt}: ").strip()
-
             try:
-
                 amount = Decimal(value)
-
             except InvalidOperation:
-
-                self._renderer.error(
-                    "Please enter a valid decimal value."
-                )
-
+                self._renderer.error("Please enter a valid decimal value.")
                 continue
-
             if minimum is not None and amount < minimum:
-
-                self._renderer.error(
-                    f"Minimum value is {minimum}."
-                )
-
+                self._renderer.error(f"Minimum value is {minimum}.")
                 continue
-
             if maximum is not None and amount > maximum:
-
-                self._renderer.error(
-                    f"Maximum value is {maximum}."
-                )
-
+                self._renderer.error(f"Maximum value is {maximum}.")
                 continue
-
             return amount
 
     #################################################################
@@ -183,108 +130,99 @@ class InputHandler:
         *,
         date_format: str = "%Y-%m-%d",
     ) -> datetime:
-        """
-        Read a date.
-        """
-
+        """Read a date."""
         while True:
-
-            value = input(
-                f"{prompt} ({date_format}): "
-            ).strip()
-
+            value = input(f"{prompt} ({date_format}): ").strip()
             try:
-
-                return datetime.strptime(
-                    value,
-                    date_format,
-                )
-
+                return datetime.strptime(value, date_format)
             except ValueError:
-
-                self._renderer.error(
-                    "Invalid date."
-                )
+                self._renderer.error("Invalid date.")
 
     #################################################################
     # Confirmation
     #################################################################
 
-    def confirm(
-        self,
-        prompt: str,
-    ) -> bool:
-        """
-        Ask for user confirmation.
-        """
-
+    def confirm(self, prompt: str) -> bool:
+        """Ask for user confirmation."""
         while True:
-
-            value = input(
-                f"{prompt} (Y/N): "
-            ).strip().lower()
-
+            value = input(f"{prompt} (Y/N): ").strip().lower()
             if value in ("y", "yes"):
-
                 return True
-
             if value in ("n", "no"):
-
                 return False
-
-            self._renderer.error(
-                "Please enter Y or N."
-            )
+            self._renderer.error("Please enter Y or N.")
 
     #################################################################
     # Menu Selection
     #################################################################
 
-    def read_menu_selection(
-        self,
-        valid_choices: set[str],
-    ) -> str:
-        """
-        Read a menu selection.
-        """
-
+    def read_menu_selection(self, valid_choices: set[str]) -> str:
+        """Read a menu selection."""
         while True:
-
-            selection = input(
-                "Selection: "
-            ).strip()
-
+            selection = input("Selection: ").strip()
             if selection in valid_choices:
-
                 return selection
+            self._renderer.error("Invalid menu selection.")
 
-            self._renderer.error(
-                "Invalid menu selection."
-            )
+    #################################################################
+    # Command Adapter Compatibility
+    #################################################################
+
+    def get_value(self, prompt: str, *, required: bool = True) -> str:
+        """Compatibility alias used by command adapters."""
+        return self.read_string(prompt, required=required)
+
+    def get_optional_value(self, prompt: str) -> str:
+        """Read an optional string value."""
+        return self.read_string(prompt, required=False)
+
+    def get_money(self, prompt: str) -> Decimal:
+        """Compatibility alias for monetary decimal input."""
+        return self.read_decimal(prompt, minimum=Decimal("0"))
+
+    def get_confirmation(self, prompt: str) -> bool:
+        """Compatibility alias for confirmation input."""
+        return self.confirm(prompt)
+
+    def get_integer(
+        self,
+        prompt: str,
+        *,
+        minimum: int | None = None,
+        maximum: int | None = None,
+    ) -> int:
+        """Compatibility alias for integer input."""
+        return self.read_integer(prompt, minimum=minimum, maximum=maximum)
+
+    def get_date(self, prompt: str, *, date_format: str = "%Y-%m-%d") -> datetime:
+        """Compatibility alias for date input."""
+        return self.read_date(prompt, date_format=date_format)
+
+    def get_command(self, valid_choices: set[str] | None = None) -> str:
+        """
+        Read a command selection.
+
+        When valid_choices is omitted, accept a non-empty command token.
+        ApplicationCLI supplies the registered command set when available.
+        """
+        if valid_choices is not None:
+            return self.read_menu_selection(valid_choices)
+        return self.read_string("Selection")
 
     #################################################################
     # Pause
     #################################################################
 
     def pause(self) -> None:
-        """
-        Wait for the user before continuing.
-        """
-
-        input(
-            "\nPress ENTER to continue..."
-        )
+        """Wait for the user before continuing."""
+        input("\nPress ENTER to continue...")
 
     #################################################################
     # Representation
     #################################################################
 
     def __repr__(self) -> str:
-
-        return (
-            f"{self.__class__.__name__}()"
-        )
+        return f"{self.__class__.__name__}()"
 
     def __str__(self) -> str:
-
         return "CLI Input Handler"

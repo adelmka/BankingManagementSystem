@@ -175,19 +175,6 @@ def test_file_exists_property(repository):
     assert repository.CSV_FILE.exists()
 
 
-def test_entity_type_property(repository):
-
-    assert repository.entity_type is DummyEntity
-
-
-def test_repository_name_property(repository):
-
-    assert (
-        repository.repository_name
-        == "DummyRepository"
-    )
-
-
 def test_contains_false_for_unknown_entity(
     repository,
 ):
@@ -1072,20 +1059,6 @@ def test_file_exists_property(
 ):
 
     assert repository.file_exists
-
-
-def test_entity_type_property(
-    repository,
-):
-
-    assert repository.entity_type is DummyEntity
-
-
-def test_repository_name_property(
-    repository,
-):
-
-    assert repository.repository_name == "DummyRepository"
 
 
 def test_commit_calls_save(

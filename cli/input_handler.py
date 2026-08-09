@@ -30,6 +30,8 @@ from decimal import InvalidOperation
 from datetime import datetime
 
 from cli.menu_renderer import MenuRenderer
+from models.value_objects.money import Money
+from utils.constants import Currency
 
 
 class InputHandler:
@@ -176,9 +178,10 @@ class InputHandler:
         """Read an optional string value."""
         return self.read_string(prompt, required=False)
 
-    def get_money(self, prompt: str) -> Decimal:
-        """Compatibility alias for monetary decimal input."""
-        return self.read_decimal(prompt, minimum=Decimal("0"))
+    def get_money(self, prompt: str) -> Money:
+        """Read a monetary amount and return the domain Money value object."""
+        amount = self.read_decimal(prompt, minimum=Decimal("0"))
+        return Money(amount, Currency.SAR)
 
     def get_confirmation(self, prompt: str) -> bool:
         """Compatibility alias for confirmation input."""

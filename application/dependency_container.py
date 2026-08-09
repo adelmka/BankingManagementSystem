@@ -19,7 +19,7 @@ Responsibilities
 
 No business logic should exist in this module.
 
-Author      : Adel Alawiyat / ChatGPT
+Author      : adelmka / ChatGPT
 Python      : 3.13+
 ====================================================================
 """

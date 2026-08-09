@@ -5,7 +5,7 @@ Banking Management System (BMS)
 File        : config.py
 Description : Centralized application configuration
 
-Author      : Adel Alawiyat / ChatGPT
+Author      : adelmka / ChatGPT
 Python      : 3.13+
 ====================================================================
 """

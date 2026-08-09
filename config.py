@@ -34,7 +34,7 @@ class Config:
 
     APP_NAME = "Banking Management System"
 
-    APP_VERSION = "1.0.0"
+    APP_VERSION = "2.1.0"
 
     SECRET_KEY = os.getenv(
         "SECRET_KEY",

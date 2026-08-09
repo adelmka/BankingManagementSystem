@@ -16,7 +16,7 @@ Responsibilities
 
 The DependencyContainer remains an internal implementation detail.
 
-Author      : Adel Alawiyat / ChatGPT
+Author      : adelmka / ChatGPT
 Python      : 3.13+
 ====================================================================
 """

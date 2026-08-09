@@ -10,16 +10,17 @@ def test_customer_command_creates_and_persists_customer(customer_service):
     renderer = MagicMock(spec=MenuRenderer)
 
     input_handler.get_value.side_effect = [
-        "John",
-        "Smith",
-        "1000000001",
+        "John",                  # first_name
+        "Smith",                 # last_name
+        "Male",                  # gender
+        "1000000001",            # national_id
         "john.command@example.com",
         "+966500000001",
-        "123 Main Street",
-        "Riyadh",
-        "Riyadh",
-        "12345",
-        "Saudi Arabia",
+        "123 Main Street",       # address_line_1
+        "Riyadh",                # city
+        "Riyadh",                # state_or_province
+        "12345",                 # postal_code
+        "Saudi Arabia",          # country
     ]
     input_handler.get_optional_value.side_effect = ["", ""]
     input_handler.get_date.return_value = datetime(1990, 1, 15)

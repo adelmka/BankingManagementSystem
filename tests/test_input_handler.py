@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from cli.input_handler import InputHandler
+from models.value_objects.money import Money
 
 
 @pytest.fixture
@@ -86,6 +87,14 @@ class TestInputHandler:
                 minimum=Decimal("10.00"),
                 maximum=Decimal("10.00"),
             ) == Decimal("10.00")
+
+    def test_get_money_returns_money_value_object(self, handler):
+        with patch("builtins.input", return_value="125.50"):
+            result = handler.get_money("Amount")
+
+        assert isinstance(result, Money)
+        assert result.amount == Decimal("125.50")
+        assert result.currency.value == "SAR"
 
     def test_read_date_returns_datetime(self, handler):
         with patch("builtins.input", return_value="2026-08-08"):

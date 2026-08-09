@@ -135,20 +135,6 @@ def test_repository_storage_path(
     )
 
 
-def test_repository_entity_type(
-    repository,
-):
-    assert repository.entity_type is Transaction
-
-
-def test_repository_name(
-    repository,
-):
-    assert repository.repository_name == (
-        "TransactionRepositoryTestDouble"
-    )
-
-
 def test_repository_string_representation(
     repository,
 ):

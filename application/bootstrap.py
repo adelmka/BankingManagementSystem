@@ -16,7 +16,7 @@ Responsibilities
 Bootstrap is responsible only for startup orchestration.
 It does not own the application's lifetime.
 
-Author      : Adel Alawiyat / ChatGPT
+Author      : adelmka / ChatGPT
 Python      : 3.13+
 ====================================================================
 """

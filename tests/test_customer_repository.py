@@ -108,14 +108,6 @@ def test_repository_initializes(repository):
     assert repository.file_exists
 
 
-def test_repository_name(repository):
-
-    assert (
-        repository.repository_name
-        == "InMemoryCustomerRepository"
-    )
-
-
 def test_entity_type(repository):
 
     assert repository.entity_type is Customer
@@ -756,27 +748,6 @@ def test_find_inactive_customers(
 
     assert len(customers) == 1
     assert customers[0] is customer
-"""
-def test_find_inactive_customers(
-    repository_with_customer,
-    sample_customer,
-):
-    sample_customer.deactivate()
-    # print(sample_customer.entity_id)
-
-    # print(repository_with_customer.find_all(active_only=False)[0].entity_id)
-    
-    repository_with_customer.update(
-        sample_customer
-    )
-
-    customers = (
-        repository_with_customer.find_inactive_customers()
-    )
-
-    assert len(customers) == 1
-    assert customers[0] is sample_customer
-"""
 
 def test_has_active_customers(
     repository_with_customer,

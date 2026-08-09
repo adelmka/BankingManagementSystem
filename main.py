@@ -147,7 +147,7 @@ def _account_transactions(
 
     renderer.render_table(
         (
-            transaction.transaction_id,
+            transaction.transaction_number,
             transaction.transaction_type,
             transaction.amount,
             transaction.description,

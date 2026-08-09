@@ -3,7 +3,8 @@ Banking Management System executable entry point.
 
 This module is intentionally a thin composition root. It starts the existing
 application bootstrap, obtains the configured BankService facade, and exposes
-core banking operations through the existing CLI rendering/input utilities.
+core banking operations through the existing CLI command adapters and
+rendering/input utilities.
 
 Run from the repository root with:
 
@@ -21,15 +22,17 @@ from models.value_objects.money import Money
 
 
 MAIN_MENU: tuple[tuple[str, str], ...] = (
-    ("1", "List customers"),
-    ("2", "List accounts"),
-    ("3", "Deposit funds"),
-    ("4", "Withdraw funds"),
-    ("5", "Transfer between accounts"),
-    ("6", "View account transactions"),
-    ("7", "Customer statistics"),
-    ("8", "Account statistics"),
-    ("9", "Bank statistics"),
+    ("1", "Create customer"),
+    ("2", "List customers"),
+    ("3", "Open account"),
+    ("4", "List accounts"),
+    ("5", "Deposit funds"),
+    ("6", "Withdraw funds"),
+    ("7", "Transfer between accounts"),
+    ("8", "View account transactions"),
+    ("9", "Customer statistics"),
+    ("10", "Account statistics"),
+    ("11", "Bank statistics"),
     ("0", "Exit"),
 )
 
@@ -156,19 +159,27 @@ def _account_transactions(
     )
 
 
-def _run_command(application, choice: str, input_handler: InputHandler, renderer: MenuRenderer) -> None:
+def _run_command(
+    application,
+    command_adapters: dict[str, object],
+    choice: str,
+    input_handler: InputHandler,
+    renderer: MenuRenderer,
+) -> None:
     """Execute one main-menu operation."""
 
     commands = {
-        "1": lambda: _list_customers(application, renderer),
-        "2": lambda: _list_accounts(application, renderer),
-        "3": lambda: _deposit(application, input_handler, renderer),
-        "4": lambda: _withdraw(application, input_handler, renderer),
-        "5": lambda: _transfer(application, input_handler, renderer),
-        "6": lambda: _account_transactions(application, input_handler, renderer),
-        "7": lambda: renderer.render_table(application.bank.customer_statistics().items()),
-        "8": lambda: renderer.render_table(application.bank.account_statistics().items()),
-        "9": lambda: renderer.render_table(application.bank.statistics().items()),
+        "1": command_adapters["customer"].create_customer,
+        "2": lambda: _list_customers(application, renderer),
+        "3": command_adapters["account"].create_account,
+        "4": lambda: _list_accounts(application, renderer),
+        "5": lambda: _deposit(application, input_handler, renderer),
+        "6": lambda: _withdraw(application, input_handler, renderer),
+        "7": lambda: _transfer(application, input_handler, renderer),
+        "8": lambda: _account_transactions(application, input_handler, renderer),
+        "9": lambda: renderer.render_table(application.bank.customer_statistics().items()),
+        "10": lambda: renderer.render_table(application.bank.account_statistics().items()),
+        "11": lambda: renderer.render_table(application.bank.statistics().items()),
     }
 
     command = commands.get(choice)
@@ -189,6 +200,10 @@ def run() -> None:
     application = start_application()
     renderer = MenuRenderer()
     input_handler = InputHandler(renderer)
+    command_adapters = application.create_cli_commands(
+        input_handler=input_handler,
+        menu_renderer=renderer,
+    )
 
     renderer.success("Banking Management System started.")
 
@@ -205,6 +220,7 @@ def run() -> None:
 
             _run_command(
                 application,
+                command_adapters,
                 choice,
                 input_handler,
                 renderer,

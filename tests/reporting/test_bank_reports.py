@@ -4,8 +4,6 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import pytest
-
 from reporting.bank_reports import BankReports
 from utils.constants import AccountType, CustomerStatus, TransactionType
 
@@ -119,19 +117,23 @@ def test_account_statistics_handles_no_accounts():
     }
 
 
-def test_transaction_statistics_counts_supported_transaction_types():
+def test_transaction_statistics_counts_transaction_types():
     reports, _ = make_reports(transactions=[
         transaction(TransactionType.DEPOSIT),
         transaction(TransactionType.DEPOSIT),
         transaction(TransactionType.WITHDRAWAL),
+        transaction(TransactionType.INTERNAL_TRANSFER),
+        transaction(TransactionType.EXTERNAL_TRANSFER),
     ])
 
-    # The current production implementation references TransactionType.TRANSFER,
-    # which does not exist in the current constants contract. This test therefore
-    # documents the intended statistics contract and will expose that production
-    # API mismatch when executed.
-    with pytest.raises(AttributeError, match="TRANSFER"):
-        reports.transaction_statistics()
+    values = rows_by_metric(reports.transaction_statistics())
+
+    assert values == {
+        "Total Transactions": 5,
+        "Deposits": 2,
+        "Withdrawals": 1,
+        "Transfers": 2,
+    }
 
 
 def test_portfolio_summary_aggregates_total_and_average_balance():

@@ -63,6 +63,7 @@ The application is organized around separation of responsibilities between domai
 ```text
 BankingManagementSystem/
 │
+├── main.py               # Executable CLI entry point
 ├── config.py
 ├── requirements.txt
 │
@@ -134,6 +135,20 @@ python -m pip install -r requirements.txt
 ```
 
 Detailed installation procedures are maintained in [`docs/installation/INSTALLATION_GUIDE.md`](docs/installation/INSTALLATION_GUIDE.md).
+
+## Starting the Application
+
+From the repository root, start the executable BMS command-line application with:
+
+```powershell
+python main.py
+```
+
+`main.py` is intentionally a thin executable composition root. It starts the existing application bootstrap, initializes runtime storage through the existing startup path, obtains the configured `BankService`, and presents the interactive console using the existing `MenuRenderer` and `InputHandler` components.
+
+The application can be terminated through the **Exit** menu option or with `Ctrl+C`.
+
+The executable entry point is covered by an integration test in `tests/integration/test_cli_entry_point.py`.
 
 ## Running Tests
 

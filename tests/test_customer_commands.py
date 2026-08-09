@@ -74,9 +74,17 @@ class TestCustomerCommands:
         self, commands, input_handler, customer_service, menu_renderer
     ):
         input_handler.get_value.side_effect = [
-            "John", "Smith", "1000000001", "john@example.com",
-            "+966500000001", "123 Main Street", "Riyadh", "Riyadh",
-            "12345", "Saudi Arabia",
+            "John",
+            "Smith",
+            "Male",
+            "1000000001",
+            "john@example.com",
+            "+966500000001",
+            "123 Main Street",
+            "Riyadh",
+            "Riyadh",
+            "12345",
+            "Saudi Arabia",
         ]
         input_handler.get_optional_value.side_effect = ["", ""]
         input_handler.get_date.return_value = datetime(1990, 1, 1)
@@ -234,9 +242,17 @@ class TestCustomerCommands:
         self, commands, input_handler
     ):
         input_handler.get_value.side_effect = [
-            "Jane", "Doe", "1000000002", "jane@example.com",
-            "+966500000002", "456 King Road", "Dammam",
-            "Eastern Province", "31411", "Saudi Arabia",
+            "Jane",
+            "Doe",
+            "Female",
+            "1000000002",
+            "jane@example.com",
+            "+966500000002",
+            "456 King Road",
+            "Dammam",
+            "Eastern Province",
+            "31411",
+            "Saudi Arabia",
         ]
         input_handler.get_optional_value.side_effect = ["A", "Unit 4"]
         input_handler.get_date.return_value = datetime(1991, 2, 3)

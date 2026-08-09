@@ -16,7 +16,7 @@ Responsibilities
 
 This module intentionally contains no presentation logic.
 
-Author      : Adel Alawiyat / ChatGPT
+Author      : adelmka / ChatGPT
 Python      : 3.13+
 ====================================================================
 """

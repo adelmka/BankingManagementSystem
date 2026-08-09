@@ -42,6 +42,11 @@ class BaseRepository(ABC, Generic[T]):
         self._ensure_storage_exists()
         self.load()
 
+    @property
+    def entity_type(self) -> type[T]:
+        """Return the concrete entity class managed by this repository."""
+        return self.ENTITY_CLASS
+
     def _ensure_storage_exists(self) -> None:
         """Ensure that the repository storage exists."""
         self.CSV_FILE.parent.mkdir(parents=True, exist_ok=True)

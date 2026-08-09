@@ -79,25 +79,10 @@ class BankReports:
             ),
         )
 
-        report.add_row(
-            "Total Customers",
-            len(customers),
-        )
-
-        report.add_row(
-            "Total Accounts",
-            len(accounts),
-        )
-
-        report.add_row(
-            "Total Transactions",
-            len(transactions),
-        )
-
-        report.add_row(
-            "Total Portfolio Balance",
-            total_balance,
-        )
+        report.add_row("Total Customers", len(customers))
+        report.add_row("Total Accounts", len(accounts))
+        report.add_row("Total Transactions", len(transactions))
+        report.add_row("Total Portfolio Balance", total_balance)
 
         return report
 
@@ -106,9 +91,7 @@ class BankReports:
     #################################################################
 
     def customer_statistics(self) -> Report:
-        """
-        Generate customer statistics.
-        """
+        """Generate customer statistics."""
 
         customers = self._bank.list_customers()
 
@@ -121,26 +104,12 @@ class BankReports:
 
         report = ReportGenerator.create_report(
             title="Customer Statistics",
-            columns=(
-                "Statistic",
-                "Value",
-            ),
+            columns=("Statistic", "Value"),
         )
 
-        report.add_row(
-            "Total Customers",
-            len(customers),
-        )
-
-        report.add_row(
-            "Active Customers",
-            active,
-        )
-
-        report.add_row(
-            "Inactive Customers",
-            inactive,
-        )
+        report.add_row("Total Customers", len(customers))
+        report.add_row("Active Customers", active)
+        report.add_row("Inactive Customers", inactive)
 
         return report
 
@@ -149,55 +118,31 @@ class BankReports:
     #################################################################
 
     def account_statistics(self) -> Report:
-        """
-        Generate account statistics.
-        """
+        """Generate account statistics."""
 
         accounts = self._bank.list_accounts()
 
         report = ReportGenerator.create_report(
             title="Account Statistics",
-            columns=(
-                "Statistic",
-                "Value",
-            ),
+            columns=("Statistic", "Value"),
         )
 
-        report.add_row(
-            "Total Accounts",
-            len(accounts),
-        )
-
+        report.add_row("Total Accounts", len(accounts))
         report.add_row(
             "Savings Accounts",
-            sum(
-                account.account_type == AccountType.SAVINGS
-                for account in accounts
-            ),
+            sum(account.account_type == AccountType.SAVINGS for account in accounts),
         )
-
         report.add_row(
             "Current Accounts",
-            sum(
-                account.account_type == AccountType.CURRENT
-                for account in accounts
-            ),
+            sum(account.account_type == AccountType.CURRENT for account in accounts),
         )
-
         report.add_row(
             "Time Deposit Accounts",
-            sum(
-                account.account_type == AccountType.TIME_DEPOSIT
-                for account in accounts
-            ),
+            sum(account.account_type == AccountType.TIME_DEPOSIT for account in accounts),
         )
-
         report.add_row(
             "Active Accounts",
-            sum(
-                account.is_active
-                for account in accounts
-            ),
+            sum(account.is_active for account in accounts),
         )
 
         return report
@@ -207,25 +152,16 @@ class BankReports:
     #################################################################
 
     def transaction_statistics(self) -> Report:
-        """
-        Generate transaction statistics.
-        """
+        """Generate transaction statistics."""
 
         transactions = self._bank.list_transactions()
 
         report = ReportGenerator.create_report(
             title="Transaction Statistics",
-            columns=(
-                "Statistic",
-                "Value",
-            ),
+            columns=("Statistic", "Value"),
         )
 
-        report.add_row(
-            "Total Transactions",
-            len(transactions),
-        )
-
+        report.add_row("Total Transactions", len(transactions))
         report.add_row(
             "Deposits",
             sum(
@@ -233,7 +169,6 @@ class BankReports:
                 for transaction in transactions
             ),
         )
-
         report.add_row(
             "Withdrawals",
             sum(
@@ -241,11 +176,13 @@ class BankReports:
                 for transaction in transactions
             ),
         )
-
         report.add_row(
             "Transfers",
             sum(
-                transaction.transaction_type == TransactionType.TRANSFER
+                transaction.transaction_type in (
+                    TransactionType.INTERNAL_TRANSFER,
+                    TransactionType.EXTERNAL_TRANSFER,
+                )
                 for transaction in transactions
             ),
         )
@@ -257,16 +194,13 @@ class BankReports:
     #################################################################
 
     def portfolio_summary(self) -> Report:
-        """
-        Generate the bank portfolio summary.
-        """
+        """Generate the bank portfolio summary."""
 
         accounts = self._bank.list_accounts()
 
         total_balance = Decimal("0.00")
 
         for account in accounts:
-
             total_balance += account.balance
 
         average_balance = (
@@ -277,26 +211,12 @@ class BankReports:
 
         report = ReportGenerator.create_report(
             title="Portfolio Summary",
-            columns=(
-                "Metric",
-                "Value",
-            ),
+            columns=("Metric", "Value"),
         )
 
-        report.add_row(
-            "Total Portfolio Balance",
-            total_balance,
-        )
-
-        report.add_row(
-            "Average Account Balance",
-            average_balance,
-        )
-
-        report.add_row(
-            "Number of Accounts",
-            len(accounts),
-        )
+        report.add_row("Total Portfolio Balance", total_balance)
+        report.add_row("Average Account Balance", average_balance)
+        report.add_row("Number of Accounts", len(accounts))
 
         return report
 
@@ -305,11 +225,7 @@ class BankReports:
     #################################################################
 
     def __repr__(self) -> str:
-
-        return (
-            f"{self.__class__.__name__}()"
-        )
+        return f"{self.__class__.__name__}()"
 
     def __str__(self) -> str:
-
         return "Bank Reports"

@@ -2,9 +2,9 @@
 
 ## 1. Purpose
 
-This guide describes how to prepare a development/test environment for the Banking Management System (BMS), install its Python dependencies, configure the application, initialize runtime storage, and validate the installation.
+This guide describes how to prepare a development/test environment for the Banking Management System (BMS), install its Python dependencies, configure the application, initialize runtime storage, start the executable command-line application, and validate the installation.
 
-The guide is based on the current repository implementation and is intended primarily for Windows/Python development environments. It does not assume a separate packaged executable or installer.
+The guide is based on the current repository implementation and is intended primarily for Windows/Python development environments. It does not assume a packaged executable or installer.
 
 ## 2. Validated Environment
 
@@ -163,11 +163,23 @@ These tests validate workflows across multiple application layers.
 
 ## 14. Starting the Application
 
-The repository contains application startup/bootstrap components rather than a documented standalone executable installer.
+The executable BMS command-line entry point is `main.py` in the repository root.
 
-Use the application entry point defined by the current repository when launching BMS. The startup path prepares dependencies and required storage before normal application use.
+From the repository root, run:
 
-Do **not** assume a command such as `python main.py` unless the corresponding entry-point file exists in the current repository. When the entry point changes, update this guide, the README, and User Guide together.
+```powershell
+python main.py
+```
+
+The entry point starts the existing application bootstrap, initializes and validates runtime storage, obtains the configured `BankService`, and then starts the interactive console application using the existing CLI rendering and input components.
+
+The application displays the BMS main menu. Select **0 — Exit** to shut down normally. `Ctrl+C` is also handled as a user interruption and triggers application shutdown.
+
+The executable startup path is covered by:
+
+```text
+tests/integration/test_cli_entry_point.py
+```
 
 ## 15. First-Run Verification
 
@@ -181,9 +193,10 @@ Use this sequence after a fresh installation:
 5. Verify configuration import
 6. Run pytest tests/reporting
 7. Run pytest
-8. Start the application using its current entry point
+8. Run python main.py
 9. Confirm storage initialization succeeds
-10. Confirm the main application interface appears
+10. Confirm the BMS main menu appears
+11. Select 0 to verify clean shutdown
 ```
 
 The principal development acceptance criterion is a green complete test suite.
@@ -199,9 +212,10 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python -m pip check
 pytest
+python main.py
 ```
 
-Expected final validation:
+Expected automated validation baseline:
 
 ```text
 1,439 passed
@@ -250,6 +264,10 @@ Check the Python version, active virtual environment, package-index connectivity
 
 Run pytest from the repository root, verify the virtual environment, and inspect the first import traceback. Check package exports and project paths before changing application code.
 
+### `python main.py` fails during startup
+
+Run the command from the repository root and inspect the first traceback. Verify that dependencies are installed and that runtime storage initialization can create the configured directories/files.
+
 ### Tests fail because of stale data
 
 Check local CSV/runtime artifacts and use the project's fixtures and storage initialization mechanisms. Avoid manually modifying application data to make a test pass.
@@ -296,6 +314,8 @@ Because the application uses CSV persistence, operating-system filesystem permis
 - [ ] Integration tests pass
 - [ ] E2E tests pass
 - [ ] Full test suite passes
+- [ ] `python main.py` starts the CLI
+- [ ] `python main.py` exits cleanly through menu option 0
 - [ ] No secrets or runtime banking data are committed
 
 ## 22. Current Validation Baseline
@@ -311,13 +331,15 @@ pytest
 1,439 passed in 10.35s
 ```
 
+The executable entry point has additionally been covered by the integration test `tests/integration/test_cli_entry_point.py`. The complete 1,439-test baseline above predates the entry-point change and should be rerun locally after pulling the new commits.
+
 Future dependency, configuration, or startup changes should be validated against a fresh environment where practical and should preserve or explicitly update the regression baseline.
 
 ## 23. Related Documentation
 
 - [`README.md`](../../README.md) — project overview
-- [`Architecture Guide`](../architecture/ARCHITECTURE_GUIDE.md) — architecture and design
 - [`User Guide`](../user/USER_GUIDE.md) — user workflows
+- [`Architecture Guide`](../architecture/ARCHITECTURE_GUIDE.md) — architecture and design
 - [`Developer Guide`](../developer/DEVELOPER_GUIDE.md) — development practices
 - `docs/api/API_REFERENCE.md` — API reference
 - `docs/diagrams/CLASS_DIAGRAMS.md` — class diagrams

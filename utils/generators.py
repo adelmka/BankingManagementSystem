@@ -41,6 +41,8 @@ class IDGenerator:
     ACCOUNT_PREFIX = "A"
     TRANSACTION_PREFIX = "T"
     BANK_PREFIX = "B"
+    _customer_sequence = 0
+    _customer_sequence_second = ""
 
     @staticmethod
     def _timestamp() -> str:
@@ -58,16 +60,24 @@ class IDGenerator:
         """
         Generate a customer identifier within the domain limit.
 
-        The Customer entity permits a maximum of 20 characters.
-        Retain millisecond precision so the generated identifier
-        remains timestamp-based while staying within that limit.
+        Format:
+            CYYYYMMDDHHMMSSNNN
 
-        Example:
-            C20260809235959123
+        The three-digit sequence guarantees uniqueness for rapid
+        sequential calls within the same second while keeping the
+        identifier below the Customer model's 20-character maximum.
         """
 
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
-        return f"{cls.CUSTOMER_PREFIX}{timestamp[:17]}"
+        now = datetime.now()
+        second = now.strftime("%Y%m%d%H%M%S")
+
+        if second != cls._customer_sequence_second:
+            cls._customer_sequence_second = second
+            cls._customer_sequence = 0
+        else:
+            cls._customer_sequence += 1
+
+        return f"{cls.CUSTOMER_PREFIX}{second}{cls._customer_sequence:03d}"
 
     @classmethod
     def employee_id(cls) -> str:

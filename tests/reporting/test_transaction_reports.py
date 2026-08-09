@@ -5,8 +5,6 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import pytest
-
 from reporting.transaction_reports import TransactionReports
 from utils.constants import TransactionStatus, TransactionType
 
@@ -31,9 +29,7 @@ def make_reports(transactions=None):
 
 
 def test_transaction_summary_returns_all_transaction_fields():
-    reports, _ = make_reports([
-        make_transaction("T1"),
-    ])
+    reports, _ = make_reports([make_transaction("T1")])
 
     report = reports.transaction_summary()
 
@@ -80,9 +76,7 @@ def test_withdrawals_filters_withdrawal_transactions():
 
 
 def test_type_reports_return_empty_when_no_matching_transactions():
-    reports, _ = make_reports([
-        make_transaction("D1", transaction_type=TransactionType.DEPOSIT),
-    ])
+    reports, _ = make_reports([make_transaction("D1", transaction_type=TransactionType.DEPOSIT)])
 
     assert reports.withdrawals().row_count == 0
 
@@ -136,13 +130,18 @@ def test_customer_history_returns_empty_for_customer_without_transactions():
     bank.get_customer_transactions.assert_called_once_with("C1")
 
 
-def test_transfers_exposes_current_transaction_type_contract_mismatch():
-    reports, _ = make_reports([])
+def test_transfers_filter_transfer_transactions():
+    reports, _ = make_reports([
+        make_transaction("I1", transaction_type=TransactionType.INTERNAL_TRANSFER),
+        make_transaction("E1", transaction_type=TransactionType.EXTERNAL_TRANSFER),
+        make_transaction("D1", transaction_type=TransactionType.DEPOSIT),
+    ])
 
-    # TransactionType currently defines INTERNAL_TRANSFER and EXTERNAL_TRANSFER,
-    # while production reporting code requests TransactionType.TRANSFER.
-    with pytest.raises(AttributeError, match="TRANSFER"):
-        reports.transfers()
+    report = reports.transfers()
+
+    assert report.metadata.title == "Transfer Report"
+    assert report.row_count == 2
+    assert [row[0] for row in report.rows] == ["I1", "E1"]
 
 
 def test_transaction_reports_have_expected_string_representations():

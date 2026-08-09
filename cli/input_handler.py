@@ -30,35 +30,15 @@ from decimal import InvalidOperation
 from datetime import datetime
 
 from cli.menu_renderer import MenuRenderer
-from models.value_objects.money import Money
-from utils.constants import Currency
 
 
 class InputHandler:
-    """
-    Handles all validated CLI input.
-    """
+    """Handles all validated CLI input."""
 
-    #################################################################
-    # Construction
-    #################################################################
-
-    def __init__(
-        self,
-        renderer: MenuRenderer,
-    ) -> None:
+    def __init__(self, renderer: MenuRenderer) -> None:
         self._renderer = renderer
 
-    #################################################################
-    # String Input
-    #################################################################
-
-    def read_string(
-        self,
-        prompt: str,
-        *,
-        required: bool = True,
-    ) -> str:
+    def read_string(self, prompt: str, *, required: bool = True) -> str:
         """Read a string from the user."""
         while True:
             value = input(f"{prompt}: ").strip()
@@ -67,10 +47,6 @@ class InputHandler:
             if not required:
                 return ""
             self._renderer.error("Input cannot be empty.")
-
-    #################################################################
-    # Integer Input
-    #################################################################
 
     def read_integer(
         self,
@@ -95,10 +71,6 @@ class InputHandler:
                 continue
             return number
 
-    #################################################################
-    # Decimal Input
-    #################################################################
-
     def read_decimal(
         self,
         prompt: str,
@@ -122,10 +94,6 @@ class InputHandler:
                 continue
             return amount
 
-    #################################################################
-    # Date Input
-    #################################################################
-
     def read_date(
         self,
         prompt: str,
@@ -140,10 +108,6 @@ class InputHandler:
             except ValueError:
                 self._renderer.error("Invalid date.")
 
-    #################################################################
-    # Confirmation
-    #################################################################
-
     def confirm(self, prompt: str) -> bool:
         """Ask for user confirmation."""
         while True:
@@ -154,10 +118,6 @@ class InputHandler:
                 return False
             self._renderer.error("Please enter Y or N.")
 
-    #################################################################
-    # Menu Selection
-    #################################################################
-
     def read_menu_selection(self, valid_choices: set[str]) -> str:
         """Read a menu selection."""
         while True:
@@ -165,10 +125,6 @@ class InputHandler:
             if selection in valid_choices:
                 return selection
             self._renderer.error("Invalid menu selection.")
-
-    #################################################################
-    # Command Adapter Compatibility
-    #################################################################
 
     def get_value(self, prompt: str, *, required: bool = True) -> str:
         """Compatibility alias used by command adapters."""
@@ -178,10 +134,13 @@ class InputHandler:
         """Read an optional string value."""
         return self.read_string(prompt, required=False)
 
-    def get_money(self, prompt: str) -> Money:
-        """Read a monetary amount and return the domain Money value object."""
-        amount = self.read_decimal(prompt, minimum=Decimal("0"))
-        return Money(amount, Currency.SAR)
+    def get_money(self, prompt: str) -> Decimal:
+        """Read a monetary amount as a Decimal.
+
+        Domain command adapters are responsible for converting the validated
+        decimal into the Money value object required by the domain layer.
+        """
+        return self.read_decimal(prompt, minimum=Decimal("0"))
 
     def get_confirmation(self, prompt: str) -> bool:
         """Compatibility alias for confirmation input."""
@@ -202,27 +161,14 @@ class InputHandler:
         return self.read_date(prompt, date_format=date_format)
 
     def get_command(self, valid_choices: set[str] | None = None) -> str:
-        """
-        Read a command selection.
-
-        When valid_choices is omitted, accept a non-empty command token.
-        ApplicationCLI supplies the registered command set when available.
-        """
+        """Read a command selection."""
         if valid_choices is not None:
             return self.read_menu_selection(valid_choices)
         return self.read_string("Selection")
 
-    #################################################################
-    # Pause
-    #################################################################
-
     def pause(self) -> None:
         """Wait for the user before continuing."""
         input("\nPress ENTER to continue...")
-
-    #################################################################
-    # Representation
-    #################################################################
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"

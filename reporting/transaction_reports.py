@@ -34,19 +34,13 @@ from utils.constants import TransactionType
 
 
 class TransactionReports:
-    """
-    Generates transaction reports.
-    """
+    """Generates transaction reports."""
 
     #################################################################
     # Construction
     #################################################################
 
-    def __init__(
-        self,
-        bank_service: BankService,
-    ) -> None:
-
+    def __init__(self, bank_service: BankService) -> None:
         self._bank = bank_service
 
     #################################################################
@@ -54,9 +48,7 @@ class TransactionReports:
     #################################################################
 
     def transaction_summary(self) -> Report:
-        """
-        Generate a report containing all transactions.
-        """
+        """Generate a report containing all transactions."""
 
         report = ReportGenerator.create_report(
             title="Transaction Summary Report",
@@ -71,7 +63,6 @@ class TransactionReports:
         )
 
         for transaction in self._bank.list_transactions():
-
             report.add_row(
                 transaction.transaction_id,
                 transaction.transaction_date,
@@ -88,9 +79,7 @@ class TransactionReports:
     #################################################################
 
     def deposits(self) -> Report:
-        """
-        Generate a deposit transaction report.
-        """
+        """Generate a deposit transaction report."""
 
         return self._transactions_by_type(
             TransactionType.DEPOSIT,
@@ -102,9 +91,7 @@ class TransactionReports:
     #################################################################
 
     def withdrawals(self) -> Report:
-        """
-        Generate a withdrawal transaction report.
-        """
+        """Generate a withdrawal transaction report."""
 
         return self._transactions_by_type(
             TransactionType.WITHDRAWAL,
@@ -116,26 +103,42 @@ class TransactionReports:
     #################################################################
 
     def transfers(self) -> Report:
-        """
-        Generate a transfer transaction report.
-        """
+        """Generate a report containing internal and external transfers."""
 
-        return self._transactions_by_type(
-            TransactionType.TRANSFER,
-            "Transfer Report",
+        report = ReportGenerator.create_report(
+            title="Transfer Report",
+            columns=(
+                "Transaction ID",
+                "Date",
+                "Account Number",
+                "Amount",
+                "Status",
+            ),
         )
+
+        transfer_types = {
+            TransactionType.INTERNAL_TRANSFER,
+            TransactionType.EXTERNAL_TRANSFER,
+        }
+
+        for transaction in self._bank.list_transactions():
+            if transaction.transaction_type in transfer_types:
+                report.add_row(
+                    transaction.transaction_id,
+                    transaction.transaction_date,
+                    transaction.account_number,
+                    transaction.amount,
+                    transaction.status.name,
+                )
+
+        return report
 
     #################################################################
     # Account Transaction History
     #################################################################
 
-    def account_history(
-        self,
-        account_number: str,
-    ) -> Report:
-        """
-        Generate the transaction history for an account.
-        """
+    def account_history(self, account_number: str) -> Report:
+        """Generate the transaction history for an account."""
 
         report = ReportGenerator.create_report(
             title=f"Account Transaction History ({account_number})",
@@ -148,12 +151,9 @@ class TransactionReports:
             ),
         )
 
-        transactions = self._bank.get_account_transactions(
-            account_number
-        )
+        transactions = self._bank.get_account_transactions(account_number)
 
         for transaction in transactions:
-
             report.add_row(
                 transaction.transaction_id,
                 transaction.transaction_date,
@@ -168,13 +168,8 @@ class TransactionReports:
     # Customer Transaction History
     #################################################################
 
-    def customer_history(
-        self,
-        customer_id: str,
-    ) -> Report:
-        """
-        Generate the transaction history for a customer.
-        """
+    def customer_history(self, customer_id: str) -> Report:
+        """Generate the transaction history for a customer."""
 
         report = ReportGenerator.create_report(
             title=f"Customer Transaction History ({customer_id})",
@@ -188,12 +183,9 @@ class TransactionReports:
             ),
         )
 
-        transactions = self._bank.get_customer_transactions(
-            customer_id
-        )
+        transactions = self._bank.get_customer_transactions(customer_id)
 
         for transaction in transactions:
-
             report.add_row(
                 transaction.transaction_id,
                 transaction.transaction_date,
@@ -214,9 +206,7 @@ class TransactionReports:
         transaction_type: TransactionType,
         title: str,
     ) -> Report:
-        """
-        Generate a report for a specific transaction type.
-        """
+        """Generate a report for a specific transaction type."""
 
         report = ReportGenerator.create_report(
             title=title,
@@ -230,9 +220,7 @@ class TransactionReports:
         )
 
         for transaction in self._bank.list_transactions():
-
             if transaction.transaction_type == transaction_type:
-
                 report.add_row(
                     transaction.transaction_id,
                     transaction.transaction_date,
@@ -248,11 +236,7 @@ class TransactionReports:
     #################################################################
 
     def __repr__(self) -> str:
-
-        return (
-            f"{self.__class__.__name__}()"
-        )
+        return f"{self.__class__.__name__}()"
 
     def __str__(self) -> str:
-
         return "Transaction Reports"

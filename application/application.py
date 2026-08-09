@@ -11,8 +11,9 @@ Responsibilities
 ----------------
 • Build the dependency graph
 • Own the application lifetime
-• Expose the BankService façade
+• Expose the BankService facade
 • Coordinate graceful shutdown
+• Provide the CLI command adapters used by the executable entry point
 
 The DependencyContainer remains an internal implementation detail.
 
@@ -68,10 +69,39 @@ class Application:
     @property
     def bank(self) -> BankService:
         """
-        Return the application's BankService façade.
+        Return the application's BankService facade.
         """
 
         return self._container.bank_service
+
+    def create_cli_commands(
+        self,
+        input_handler,
+        menu_renderer,
+    ) -> dict[str, object]:
+        """
+        Create the CLI command adapters for the running application.
+
+        The dependency container remains private to the application.
+        The executable composition root requests command adapters through
+        this method rather than reaching into ``_container`` directly.
+        """
+
+        from cli.commands.account_commands import AccountCommands
+        from cli.commands.customer_commands import CustomerCommands
+
+        return {
+            "customer": CustomerCommands(
+                customer_service=self._container.customer_service,
+                input_handler=input_handler,
+                menu_renderer=menu_renderer,
+            ),
+            "account": AccountCommands(
+                account_service=self._container.account_service,
+                input_handler=input_handler,
+                menu_renderer=menu_renderer,
+            ),
+        }
 
     #################################################################
     # Configuration

@@ -1,4 +1,4 @@
-﻿"""
+"""
 ===============================================================================
 Banking Management System (BMS)
 
@@ -111,6 +111,21 @@ class BaseService(
         return (
             self._repository.repository_summary()
         )
+
+    # ------------------------------------------------------------------
+
+    def statistics(
+        self,
+    ) -> dict[str, object]:
+        """
+        Return repository statistics.
+
+        Concrete services may override this method when they need to
+        expose service-specific statistics. The default implementation
+        delegates to the repository statistics contract.
+        """
+
+        return self._repository.statistics()
 
 #PART 2
 

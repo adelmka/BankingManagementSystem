@@ -1,4 +1,4 @@
-﻿"""
+"""
 ====================================================================
 Banking Management System (BMS)
 
@@ -56,11 +56,18 @@ class IDGenerator:
     @classmethod
     def customer_id(cls) -> str:
         """
+        Generate a customer identifier within the domain limit.
+
+        The Customer entity permits a maximum of 20 characters.
+        Retain millisecond precision so the generated identifier
+        remains timestamp-based while staying within that limit.
+
         Example:
-            C20260723211500123456
+            C20260809235959123
         """
 
-        return f"{cls.CUSTOMER_PREFIX}{cls._timestamp()}"
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
+        return f"{cls.CUSTOMER_PREFIX}{timestamp[:17]}"
 
     @classmethod
     def employee_id(cls) -> str:

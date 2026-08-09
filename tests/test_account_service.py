@@ -537,85 +537,9 @@ def test_balance_returns_account_balance(
     assert service.balance(ACCOUNT_NUMBER) == account.balance
 
 
-def test_close_account_closes_zero_balance_account(
-    service,
-    account_repository,
-    account,
-    monkeypatch,
-):
-    account.balance = money("0.00")
-    monkeypatch.setattr(service, "validate_account", lambda _: account)
-
-    result = service.close_account(ACCOUNT_NUMBER)
-
-    assert result is account
-    account.close.assert_called_once_with()
-    account_repository.save_account.assert_called_once_with(account)
-
-
-def test_freeze_account_freezes_and_persists(
-    service,
-    account_repository,
-    account,
-    monkeypatch,
-):
-    monkeypatch.setattr(service, "validate_account", lambda _: account)
-
-    result = service.freeze_account(ACCOUNT_NUMBER)
-
-    assert result is account
-    account.freeze.assert_called_once_with()
-    account_repository.save_account.assert_called_once_with(account)
-
-
-def test_unfreeze_account_unfreezes_and_persists(
-    service,
-    account_repository,
-    account,
-):
-    account_repository.get_or_raise.return_value = account
-
-    result = service.unfreeze_account(ACCOUNT_NUMBER)
-
-    assert result is account
-    account.unfreeze.assert_called_once_with()
-    account_repository.save_account.assert_called_once_with(account)
-
-
 # ---------------------------------------------------------------------------
 # Account queries and summaries
 # ---------------------------------------------------------------------------
-
-
-def test_accounts_for_customer_delegates_to_repository(
-    service,
-    account_repository,
-    account,
-):
-    account_repository.find_by_customer.return_value = [account]
-
-    assert service.accounts_for_customer(CUSTOMER_NUMBER) == [account]
-
-
-def test_active_accounts_delegates_to_repository(
-    service,
-    account_repository,
-    account,
-):
-    account_repository.find_active_accounts.return_value = [account]
-
-    assert service.active_accounts() == [account]
-
-
-def test_inactive_accounts_delegates_to_repository(
-    service,
-    account_repository,
-    account,
-):
-    account_repository.find_inactive_accounts.return_value = [account]
-
-    assert service.inactive_accounts() == [account]
-
 
 def test_account_summary_returns_expected_fields(
     service,

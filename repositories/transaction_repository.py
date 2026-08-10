@@ -231,7 +231,9 @@ class TransactionRepository(
             raise EntityAlreadyExistsError(
                 f"Transaction already exists: {entity.transaction_number}"
             )
-        return super().add(entity)
+        result = super().add(entity)
+        self.save()
+        return entity
 
     def add_transaction(self, transaction: Transaction) -> Transaction:
         """Compatibility alias for persisting a transaction."""

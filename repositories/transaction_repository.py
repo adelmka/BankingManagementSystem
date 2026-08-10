@@ -6,7 +6,7 @@ File        : transaction_repository.py
 Description : Transaction Repository.
 
 Author      : Adel Alawiyat / ChatGPT
-Version     : 2.1.1
+Version     : 2.1.2
 Python      : 3.13+
 
 ===============================================================================
@@ -151,9 +151,9 @@ class TransactionRepository(
         self,
         status: TransactionStatus,
     ) -> list[Transaction]:
-        """Return transactions matching the supplied status."""
+        """Return transactions matching the supplied transaction status."""
         return self.find_where(
-            lambda transaction: transaction.status == status
+            lambda transaction: transaction.transaction_status == status
         )
 
     def find_by_date_range(
@@ -239,7 +239,7 @@ class TransactionRepository(
         return [
             transaction
             for transaction in self.find_by_account(account_number)
-            if transaction.status == status
+            if transaction.transaction_status == status
         ]
 
     def add(self, entity: Transaction) -> Transaction:

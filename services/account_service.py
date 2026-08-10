@@ -113,6 +113,35 @@ class AccountService(BaseService[Account]):
         account.withdraw(amount)
         self._repository.save_account(account)
 
+    def _record_account_transaction(
+        self,
+        account: Account,
+        amount: Money,
+        transaction_type: TransactionType,
+        description: str,
+    ) -> Transaction:
+        """Persist the immutable transaction for a single-account operation."""
+        if transaction_type == TransactionType.DEPOSIT:
+            source_account = None
+            destination_account = account.account_number
+        elif transaction_type == TransactionType.WITHDRAWAL:
+            source_account = account.account_number
+            destination_account = None
+        else:
+            raise ValidationError("Unsupported account transaction type.")
+
+        transaction = Transaction(
+            transaction_number=IDGenerator.transaction_number(),
+            transaction_type=transaction_type,
+            amount=amount,
+            source_account=source_account,
+            destination_account=destination_account,
+            initiated_by="SYSTEM",
+            description=description or transaction_type.value,
+        )
+        self._transaction_repository.add_transaction(transaction)
+        return transaction
+
     def deposit(
         self,
         account_number: str,
@@ -124,6 +153,12 @@ class AccountService(BaseService[Account]):
         try:
             with self._operation_scope():
                 self._credit_account(account, amount)
+                self._record_account_transaction(
+                    account,
+                    amount,
+                    TransactionType.DEPOSIT,
+                    description,
+                )
         except Exception as ex:
             self._operation_failed("deposit", ex)
             raise
@@ -142,6 +177,12 @@ class AccountService(BaseService[Account]):
         try:
             with self._operation_scope():
                 self._debit_account(account, amount)
+                self._record_account_transaction(
+                    account,
+                    amount,
+                    TransactionType.WITHDRAWAL,
+                    description,
+                )
         except Exception as ex:
             self._operation_failed("withdraw", ex)
             raise

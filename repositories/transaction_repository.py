@@ -233,6 +233,10 @@ class TransactionRepository(
             )
         return super().add(entity)
 
+    def add_transaction(self, transaction: Transaction) -> Transaction:
+        """Compatibility alias for persisting a transaction."""
+        return self.add(transaction)
+
     def update(self, entity: Transaction) -> Transaction:
         """Transactions are immutable and cannot be updated."""
         raise UnsupportedOperationError(

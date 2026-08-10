@@ -166,7 +166,7 @@ class AccountService(BaseService[Account]):
             initiated_by="SYSTEM",
             description=description or "Transfer",
         )
-        self._transaction_repository.add_transaction(transaction)
+        self._transaction_repository.add(transaction)
         return transaction
 
     def transfer(

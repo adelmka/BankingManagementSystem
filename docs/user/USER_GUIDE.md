@@ -2,272 +2,179 @@
 
 ## 1. Purpose
 
-This guide explains how an end user operates the Banking Management System (BMS) through its command-line interface (CLI). It focuses on the workflows exposed by the current application rather than on internal implementation details.
-
-The current CLI is organized around these areas: Customer Management, Account Management, Transaction Management, Reporting, Administration, System Information, and Exit.
+This guide explains how an end user operates the Banking Management System (BMS) through its current executable command-line interface (CLI). It focuses on the workflows exposed by `main.py` and the current command adapters rather than on internal implementation details.
 
 ## 2. Starting the Application
 
-Use the application entry point provided by the current project. The startup implementation prepares storage, validates storage readiness, constructs the application dependency graph, and returns a running application instance.
+From the repository root, run:
 
-At startup, the system initializes the required filesystem resources and validates the dependency graph before normal operations are exposed.
+```powershell
+python main.py
+```
+
+The application initializes and validates runtime storage, constructs the application dependency graph, and starts the interactive CLI.
 
 ## 3. Main Menu
 
-The main menu provides:
+The current executable main menu is:
 
 | Option | Function |
 |---|---|
-| 1 | Customer Management |
-| 2 | Account Management |
-| 3 | Transaction Management |
-| 4 | Reporting |
-| 5 | Administration |
-| 6 | System Information |
+| 1 | Create customer |
+| 2 | List customers |
+| 3 | Open account |
+| 4 | List accounts |
+| 5 | Deposit funds |
+| 6 | Withdraw funds |
+| 7 | Transfer between accounts |
+| 8 | View account transactions |
+| 9 | Customer statistics |
+| 10 | Account statistics |
+| 11 | Bank statistics |
 | 0 | Exit |
 
-Select the numeric option corresponding to the required function.
+Select the numeric option corresponding to the required operation.
 
-## 4. Customer Management
-
-| Option | Function |
-|---|---|
-| 1 | Create Customer |
-| 2 | View Customer |
-| 3 | Update Customer |
-| 4 | Delete Customer |
-| 5 | List Customers |
-| 0 | Back |
+## 4. Customer Operations
 
 ### Create a Customer
 
-Select **Customer Management → Create Customer**. The current CLI collects first name, last name, email, and phone. The command layer passes the information to the customer service. On success, the system displays a confirmation and the created customer.
-
-### View a Customer
-
-Select **View Customer** and enter the customer ID when prompted. The system retrieves and displays the customer.
-
-### Update a Customer
-
-Select **Update Customer**, enter the customer ID, and provide the optional fields requested by the interface. The current command implementation supports updating email and phone.
-
-### Delete a Customer
-
-Select **Delete Customer**, enter the customer ID, and confirm the deletion when prompted. If confirmation is not given, the operation is cancelled.
+Select **1 — Create customer**. The current CLI collects the customer's name, date of birth, gender, national ID, email, phone number, address, and KYC status. Optional middle name and address line 2 can be supplied when prompted. On success, the system displays the generated customer ID and customer name.
 
 ### List Customers
 
-Select **List Customers** to retrieve and display all customers available through the customer service.
+Select **2 — List customers**. The system retrieves customers through the application banking façade and displays the available customer records. If no customers exist, the CLI reports that no customers were found.
 
-## 5. Account Management
-
-| Option | Function |
-|---|---|
-| 1 | Open Account |
-| 2 | View Account |
-| 3 | Close Account |
-| 4 | List Customer Accounts |
-| 5 | Change Interest Rate |
-| 6 | Configure Fees |
-| 0 | Back |
-
-The domain model includes savings, current, and time-deposit account types.
+## 5. Account Operations
 
 ### Open an Account
 
-Select **Open Account** and provide the information requested by the current interface. Account creation is handled by the account service, which coordinates the repositories and applies the implemented business rules.
+Select **3 — Open account**. The current account command adapter collects the customer ID, account type, opening parameters, and account-specific settings required by the selected account type. The account service then applies the implemented business rules and persists the account.
 
-### View an Account
+The supported domain account types are:
 
-Select **View Account** and provide the account number requested by the interface.
+- Savings account
+- Current account
+- Time-deposit account
 
-### Close an Account
+Monetary input is represented internally by the `Money` value object. Enter amounts using the numeric format accepted by the prompt.
 
-Select **Close Account** and identify the account. The service layer validates the operation before persistence is updated.
+### List Accounts
 
-### List Customer Accounts
+Select **4 — List accounts**. The application displays available accounts, including account number, customer association, account type, and balance.
 
-Select **List Customer Accounts** and identify the customer when prompted. The system retrieves accounts associated with that customer.
+## 6. Financial Operations
 
-### Interest Rates and Fees
+### Deposit Funds
 
-The Account Management menu exposes options for changing interest rates and configuring fees. Use the values and prompts presented by the current application rather than assuming a particular rate or fee.
+Select **5 — Deposit funds**, enter the account number, and enter a positive monetary amount. The banking façade validates the operation, updates the account, and records the resulting transaction.
 
-## 6. Transaction Management
+### Withdraw Funds
 
-| Option | Function |
-|---|---|
-| 1 | Deposit |
-| 2 | Withdraw |
-| 3 | Transfer Between Accounts |
-| 4 | Transfer to External Bank |
-| 5 | View Transaction History |
-| 0 | Back |
-
-### Deposit
-
-Select **Deposit**, identify the target account, and enter the requested amount and description. The account service applies the implemented validation and records the resulting transaction.
-
-### Withdraw
-
-Select **Withdraw**, identify the account, and enter the requested amount and description. The service layer validates the operation, including rules applicable to the account and available balance.
+Select **6 — Withdraw funds**, enter the account number, and enter the withdrawal amount. Account-specific eligibility and available-balance rules are applied by the domain/service layers.
 
 ### Transfer Between Accounts
 
-Select **Transfer Between Accounts** and provide the source account, destination account, amount, and requested description. The account and transaction services coordinate the operation and transaction records.
+Select **7 — Transfer between accounts**. Enter the source account, destination account, transfer amount, and description. The operation is coordinated through the banking façade and account/transaction services.
 
-### External-Bank Transfer
+The current executable CLI exposes **internal account-to-account transfer only**. It does not claim an external-bank integration.
 
-The current menu exposes **Transfer to External Bank**. This menu label should not be interpreted as evidence of an external banking integration unless such an integration is explicitly implemented by the current command/service code.
+### View Account Transactions
 
-### Transaction History
+Select **8 — View account transactions** and enter the account number. The system retrieves transaction activity for that account and displays the available transaction records. If no transactions exist, the CLI reports that no transactions were found.
 
-Select **View Transaction History** to retrieve transaction activity. The application also supports transaction listings, account statements, recent transactions, and date-range transaction queries through its service façade.
+## 7. Statistics and Reporting
 
-## 7. Reporting
+### Customer Statistics
 
-| Option | Function |
-|---|---|
-| 1 | Customer Report |
-| 2 | Account Report |
-| 3 | Transaction Report |
-| 4 | Bank Summary |
-| 0 | Back |
+Select **9 — Customer statistics** to display customer-level aggregate statistics such as total, active, and inactive customers.
 
-The reporting subsystem is independently validated by **70 passing tests** and includes customer, account, transaction, and bank reporting plus report generation and export functionality.
+### Account Statistics
 
-### Customer Report
+Select **10 — Account statistics** to display account-level aggregates, including total, active, inactive, savings, current, time-deposit, dormant, and frozen accounts where supplied by the current banking façade.
 
-Use the Customer Report to produce customer-oriented report data supported by the reporting implementation.
+### Bank Statistics
 
-### Account Report
+Select **11 — Bank statistics** to display the aggregate statistics returned by `BankService.statistics()`.
 
-Use the Account Report for account-level information supported by the reporting implementation.
+The repository also contains a dedicated reporting subsystem for customer, account, transaction, and bank reports plus report generation and export. Those reporting components are covered by the reporting test suite.
 
-### Transaction Report
-
-Use the Transaction Report for transaction-oriented reporting.
-
-### Bank Summary
-
-Use the Bank Summary for aggregated banking information provided by the reporting subsystem.
-
-### Report Output
-
-Reports are represented using report metadata, columns, and rows. Report records can be converted to dictionaries and exported through the reporting/export functionality.
-
-## 8. Administration
-
-| Option | Function |
-|---|---|
-| 1 | Backup Data |
-| 2 | Restore Data |
-| 3 | Application Settings |
-| 0 | Back |
-
-These options are part of the current CLI menu definition. Their detailed behavior should follow the current command handlers and configuration implementation.
-
-## 9. System Information
-
-| Option | Function |
-|---|---|
-| 1 | Application Information |
-| 2 | Storage Status |
-| 3 | Configuration |
-| 0 | Back |
-
-Use these options to inspect information about the running application, storage state, and active configuration as exposed by the current interface.
-
-## 10. Data Persistence
+## 8. Data Persistence
 
 The implemented persistence layer uses CSV files. Application configuration determines the locations of data files and related runtime directories.
 
-Users should not manually edit CSV files while the application is operating unless the procedure is explicitly required for an administrative or recovery task. Manual changes can violate domain validation rules or create inconsistent data.
+Users should not manually edit CSV files while the application is operating unless an administrative or recovery procedure explicitly requires it.
 
-## 11. Identifiers and Data Entry
+## 9. Identifiers and Data Entry
 
-When the interface requests a customer ID, account number, or transaction number, enter the identifier exactly as displayed by the application.
+When the interface requests a customer ID or account number, enter the identifier exactly as displayed by the application.
 
-For monetary values, use the numeric format accepted by the current input handler and the application's configured currency. For dates, follow the format requested by the current prompt.
+For monetary values, enter a non-negative numeric value in the format accepted by the prompt. Financial operations such as deposits, withdrawals, and transfers apply their own minimum/eligibility rules.
 
-## 12. Error Handling
+For dates, follow the format shown by the current prompt, normally `%Y-%m-%d`.
 
-The CLI command layer catches operational exceptions and presents an error message through the menu renderer. Users should read the displayed error carefully before retrying an operation.
+For gender, use one of the values accepted by the current customer command adapter: Male, Female, Other, or Not Specified.
 
-Common failure categories include invalid input, missing customer or account, duplicate entity, invalid account state, invalid transaction, insufficient available funds, persistence/storage problems, and business-rule violations.
+## 10. Error Handling
 
-Do not repeatedly retry an operation that reports a business-rule violation without correcting the underlying input or account state.
+The CLI command/application boundary catches operational failures and presents an error through the menu renderer. Read the complete error before retrying an operation.
 
-## 13. Typical Daily Workflow
+Common failure categories include invalid input, missing customer or account, duplicate entity, invalid account state, invalid transaction, insufficient funds, persistence/storage problems, and business-rule violations.
+
+## 11. Typical Daily Workflow
 
 ```text
 Start Application
        |
-       v
-Customer Management
+       +--> Create customer
        |
-       +--> Create / View / Update Customer
+       +--> Open account
        |
-       v
-Account Management
+       +--> Deposit / Withdraw
        |
-       +--> Open Account
+       +--> Transfer between accounts
        |
-       v
-Transaction Management
+       +--> View account transactions
        |
-       +--> Deposit
-       +--> Withdraw
-       +--> Transfer
-       +--> Review History
-       |
-       v
-Reporting
-       |
-       +--> Customer / Account / Transaction / Bank Report
+       +--> Review customer/account/bank statistics
        |
        v
 Exit
 ```
 
-## 14. Safe Operating Practices
+## 12. Safe Operating Practices
 
 1. Verify customer and account identifiers before financial operations.
 2. Verify transaction amounts before confirming operations.
 3. Review the destination account before a transfer.
-4. Use reporting and transaction history to verify completed activity.
+4. Use transaction history and statistics to verify completed activity.
 5. Do not delete or modify runtime CSV files without an appropriate administrative or recovery procedure.
 6. Back up application data before manual maintenance or recovery operations.
 7. Protect configuration and runtime data from unauthorized access.
 
-## 15. Functional Validation Status
+## 13. Functional Validation Status
 
-The current project baseline has been validated with the complete automated test suite:
-
-```text
-1,439 passed in 10.35s
-```
-
-The reporting suite was also executed independently:
+The latest supplied local validation baseline is:
 
 ```text
-70 passed in 0.55s
+pytest -x
+1,419 passed in 9.39s
 ```
 
-These results validate behavior represented by the current automated tests. They do not imply that every menu label represents a separately implemented external integration.
+A manual CLI workflow was also confirmed successfully for customer creation and subsequent account workflow. The automated baseline is the primary regression evidence.
 
-## 16. Related Documentation
+## 14. Related Documentation
 
 - [`README.md`](../../README.md) — project overview and quick start
 - [`Architecture Guide`](../architecture/ARCHITECTURE_GUIDE.md) — system architecture and design
-- `docs/installation/INSTALLATION_GUIDE.md` — installation and environment setup
-- `docs/developer/DEVELOPER_GUIDE.md` — development and extension guidance
-- `docs/api/API_REFERENCE.md` — public API reference
-- `docs/diagrams/CLASS_DIAGRAMS.md` — class diagrams
-- `docs/diagrams/SEQUENCE_DIAGRAMS.md` — sequence diagrams
+- [`Installation Guide`](../installation/INSTALLATION_GUIDE.md) — installation and environment setup
+- [`Developer Guide`](../developer/DEVELOPER_GUIDE.md) — development and extension guidance
+- [`API Reference`](../api/API_REFERENCE.md) — public API reference
+- [`Class Diagrams`](../diagrams/CLASS_DIAGRAMS.md) — class diagrams
+- [`Sequence Diagrams`](../diagrams/SEQUENCE_DIAGRAMS.md) — sequence diagrams
 
-## 17. Scope of This Guide
+## 15. Scope of This Guide
 
-This guide documents the current CLI menu structure and implemented banking workflows at the user level. It intentionally avoids inventing detailed prompts or behavior that cannot be established from the current implementation.
+This guide documents the current executable CLI menu and the implemented banking workflows at the user level. It intentionally avoids inventing capabilities not established by the current implementation.
 
-The source code and automated tests remain authoritative when a discrepancy exists between this guide and the running application. Documentation validation will be performed after all planned documentation deliverables are completed.
+The source code and automated tests remain authoritative when a discrepancy exists between this guide and the running application.

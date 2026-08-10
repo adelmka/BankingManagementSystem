@@ -8,6 +8,7 @@ from decimal import Decimal, InvalidOperation
 from models.current_account import CurrentAccount
 from models.savings_account import SavingsAccount
 from models.time_deposit_account import TimeDepositAccount
+from models.value_objects.money import Money
 from services.account_service import AccountService
 from utils.constants import AccountType, InterestFrequency
 from utils.generators import IDGenerator
@@ -54,7 +55,7 @@ class AccountCommands:
     def deposit(self) -> None:
         try:
             account_number = self.input_handler.get_value("Enter account number: ")
-            amount = self.input_handler.get_money("Enter deposit amount: ")
+            amount = self._as_money(self.input_handler.get_money("Enter deposit amount: "))
             account = self.account_service.deposit(account_number, amount)
             self.menu_renderer.display_message("Deposit completed successfully.")
             self.menu_renderer.display_object(account)
@@ -65,7 +66,7 @@ class AccountCommands:
     def withdraw(self) -> None:
         try:
             account_number = self.input_handler.get_value("Enter account number: ")
-            amount = self.input_handler.get_money("Enter withdrawal amount: ")
+            amount = self._as_money(self.input_handler.get_money("Enter withdrawal amount: "))
             account = self.account_service.withdraw(account_number, amount)
             self.menu_renderer.display_message("Withdrawal completed successfully.")
             self.menu_renderer.display_object(account)
@@ -86,7 +87,7 @@ class AccountCommands:
     def apply_fee(self) -> None:
         try:
             account_number = self.input_handler.get_value("Enter account number: ")
-            fee_amount = self.input_handler.get_money("Enter fee amount: ")
+            fee_amount = self._as_money(self.input_handler.get_money("Enter fee amount: "))
             account = self.account_service.apply_fee(account_number, fee_amount)
             self.menu_renderer.display_message("Fee applied successfully.")
             self.menu_renderer.display_object(account)
@@ -190,12 +191,25 @@ class AccountCommands:
         except ValueError as exc:
             raise ValueError(f"Invalid integer value: {value}") from exc
 
+    @staticmethod
+    def _as_money(value):
+        """Normalize CLI monetary values at the domain boundary.
+
+        InputHandler intentionally returns Decimal for its generic money input
+        contract. Domain account objects, however, require the Money value
+        object. Existing tests may supply an already-constructed Money object,
+        so those values are preserved unchanged.
+        """
+        if isinstance(value, Money):
+            return value
+        return Money(value)
+
     def _build_account(self, data: dict):
         """Construct the concrete domain account expected by AccountService."""
         common = {
             "account_number": IDGenerator.account_number(),
             "customer_id": data["customer_id"],
-            "opening_balance": data["opening_balance"],
+            "opening_balance": self._as_money(data["opening_balance"]),
             "opened_date": date.today(),
         }
         account_type = data["account_type"]
@@ -204,15 +218,15 @@ class AccountCommands:
             return SavingsAccount(
                 **common,
                 interest_rate=data["interest_rate"],
-                minimum_balance=data["minimum_balance"],
+                minimum_balance=self._as_money(data["minimum_balance"]),
                 interest_frequency=data["interest_frequency"],
             )
         if account_type is AccountType.CURRENT:
             return CurrentAccount(
                 **common,
-                overdraft_limit=data["overdraft_limit"],
-                maintenance_fee=data["maintenance_fee"],
-                overdraft_fee=data["overdraft_fee"],
+                overdraft_limit=self._as_money(data["overdraft_limit"]),
+                maintenance_fee=self._as_money(data["maintenance_fee"]),
+                overdraft_fee=self._as_money(data["overdraft_fee"]),
                 overdraft_enabled=data["overdraft_enabled"],
             )
         if account_type is AccountType.TIME_DEPOSIT:

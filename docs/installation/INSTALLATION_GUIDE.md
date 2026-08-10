@@ -8,17 +8,16 @@ The guide is based on the current repository implementation and is intended prim
 
 ## 2. Validated Environment
 
-The current project baseline was validated with:
+The latest supplied project baseline was validated with:
 
 | Component | Baseline |
 |---|---|
 | Operating system | Windows |
 | Python | 3.13.9 |
 | pytest | 8.4.2 |
-| Full test suite | 1,439 passed |
-| Reporting suite | 70 passed |
+| Full test suite | 1,419 passed |
 
-The repository's `requirements.txt` specifies Python 3.13 and the current runtime/test dependencies, including Flask, Flask-Login, Flask-WTF, Werkzeug, bcrypt, pandas, python-dotenv, openpyxl, pytest, pytest-cov, requests, python-dateutil, email-validator, WTForms, Jinja2, MarkupSafe, itsdangerous, click, colorama, tabulate, and rich.
+The repository's `requirements.txt` is the authoritative dependency specification.
 
 ## 3. Prerequisites
 
@@ -32,8 +31,6 @@ Install:
 A virtual environment is strongly recommended.
 
 ## 4. Verify Python and pip
-
-From PowerShell:
 
 ```powershell
 python --version
@@ -59,43 +56,20 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-The activated prompt should normally show `(.venv)`.
-
-If PowerShell blocks activation, use the organization's approved Python/PowerShell policy or another supported shell rather than unnecessarily changing system security settings.
-
 ## 7. Install Dependencies
-
-Upgrade pip:
 
 ```powershell
 python -m pip install --upgrade pip
-```
-
-Install the project's declared dependencies:
-
-```powershell
 python -m pip install -r requirements.txt
+python -m pip check
+pytest --version
 ```
 
 `requirements.txt` is the authoritative dependency list for the current repository.
 
-Verify dependency consistency:
-
-```powershell
-python -m pip check
-```
-
-Verify pytest:
-
-```powershell
-pytest --version
-```
-
 ## 8. Configuration
 
-Application configuration is centralized in `config.py` through the `Config` class and environment-specific configuration classes.
-
-The configuration covers application and bank identity, filesystem locations, CSV files, interest rates, fees, authentication, logging, pagination, and date/time settings. The module also loads `.env` values when present.
+Application configuration is centralized in `config.py` through the `Config` class and environment-specific configuration classes. Configuration covers application and bank identity, filesystem locations, CSV files, interest rates, fees, authentication, logging, pagination, and date/time settings.
 
 If environment variables are required, create a local `.env` file using the names expected by the current configuration implementation. Never commit secrets, credentials, private keys, or sensitive production values.
 
@@ -103,14 +77,7 @@ If environment variables are required, create a local `.env` file using the name
 
 The current persistence implementation uses CSV files. Configuration defines the locations of data files and runtime directories such as data, logs, and backups.
 
-The project's startup/bootstrap and storage-initialization components prepare required filesystem resources. Do not manually create or alter runtime files unless the current execution path or an administrative/recovery procedure requires it.
-
-For a new development environment:
-
-1. Use the configured data directory.
-2. Allow the project's storage initialization to prepare required resources.
-3. Do not copy production data into development unless explicitly intended.
-4. Never commit sensitive banking data to the repository.
+The startup/bootstrap and storage-initialization components prepare required filesystem resources. Do not manually create or alter runtime files unless the current execution path or an administrative/recovery procedure requires it.
 
 ## 10. Verify Configuration Import
 
@@ -122,66 +89,68 @@ python -c "import config; print(config.Config.APP_NAME); print(config.Config.APP
 
 The current configuration identifies application version **2.1.0**.
 
-If this fails, inspect the first traceback for an environment, dependency, import/export, or configuration-path problem before modifying application code.
-
 ## 11. Validate the Installation
 
 The primary installation test is the complete automated suite:
 
 ```powershell
-pytest
+pytest -x
 ```
 
-Current validated result:
+Latest supplied result:
 
 ```text
-1,439 passed in 10.35s
+1,419 passed in 9.39s
 ```
 
 This validates the installed environment across unit, integration, reporting, and end-to-end tests.
 
-## 12. Validate Reporting
+## 12. Validate Reporting and Targeted Areas
+
+Use the relevant targeted commands when needed:
 
 ```powershell
-pytest tests/reporting
-```
-
-Current validated result:
-
-```text
-70 passed in 0.55s
-```
-
-## 13. Validate Integration and E2E Tests
-
-```powershell
+pytest tests/reporting -v
 pytest tests/integration -v
 pytest tests/e2e -v
 ```
 
-These tests validate workflows across multiple application layers.
+The complete suite remains the primary regression gate.
 
-## 14. Starting the Application
+## 13. Starting the Application
 
 The executable BMS command-line entry point is `main.py` in the repository root.
 
-From the repository root, run:
+From the repository root:
 
 ```powershell
 python main.py
 ```
 
-The entry point starts the existing application bootstrap, initializes and validates runtime storage, obtains the configured `BankService`, and then starts the interactive console application using the existing CLI rendering and input components.
+The entry point starts the existing application bootstrap, initializes and validates runtime storage, obtains the configured `BankService`, creates the current CLI command adapters, and starts the interactive console using the existing rendering and input components.
 
-The application displays the BMS main menu. Select **0 — Exit** to shut down normally. `Ctrl+C` is also handled as a user interruption and triggers application shutdown.
-
-The executable startup path is covered by:
+The current main menu is:
 
 ```text
-tests/integration/test_cli_entry_point.py
+1. Create customer
+2. List customers
+3. Open account
+4. List accounts
+5. Deposit funds
+6. Withdraw funds
+7. Transfer between accounts
+8. View account transactions
+9. Customer statistics
+10. Account statistics
+11. Bank statistics
+0. Exit
 ```
 
-## 15. First-Run Verification
+Select **0 — Exit** to shut down normally. `Ctrl+C` is also handled as a user interruption and triggers application shutdown.
+
+The executable startup path is covered by `tests/integration/test_cli_entry_point.py`.
+
+## 14. First-Run Verification
 
 Use this sequence after a fresh installation:
 
@@ -191,17 +160,19 @@ Use this sequence after a fresh installation:
 3. Install requirements.txt
 4. Run pip check
 5. Verify configuration import
-6. Run pytest tests/reporting
-7. Run pytest
-8. Run python main.py
-9. Confirm storage initialization succeeds
-10. Confirm the BMS main menu appears
-11. Select 0 to verify clean shutdown
+6. Run pytest -x
+7. Run python main.py
+8. Confirm storage initialization succeeds
+9. Confirm the BMS main menu appears
+10. Create a test customer
+11. Open a test account
+12. Verify a basic account operation if required
+13. Select 0 to verify clean shutdown
 ```
 
 The principal development acceptance criterion is a green complete test suite.
 
-## 16. Windows PowerShell Quick Setup
+## 15. Windows PowerShell Quick Setup
 
 ```powershell
 git clone https://github.com/adelmka/BankingManagementSystem.git
@@ -211,17 +182,17 @@ python -m venv .venv
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python -m pip check
-pytest
+pytest -x
 python main.py
 ```
 
-Expected automated validation baseline:
+Expected supplied automated validation baseline:
 
 ```text
-1,439 passed
+1,419 passed in 9.39s
 ```
 
-## 17. Updating an Existing Installation
+## 16. Updating an Existing Installation
 
 Before updating:
 
@@ -230,31 +201,19 @@ git status
 git pull
 ```
 
-Refresh dependencies:
+Refresh dependencies and validate:
 
 ```powershell
 python -m pip install -r requirements.txt
 python -m pip check
-pytest
+pytest -x
 ```
 
-If the dependency environment becomes inconsistent, recreate the virtual environment:
-
-```powershell
-deactivate
-Remove-Item -Recurse -Force .venv
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-pytest
-```
-
-## 18. Troubleshooting
+## 17. Troubleshooting
 
 ### Python is not recognized
 
-Verify that Python is installed and available on PATH. On Windows, also check the Python launcher if applicable.
+Verify that Python is installed and available on PATH.
 
 ### Dependency installation fails
 
@@ -266,7 +225,7 @@ Run pytest from the repository root, verify the virtual environment, and inspect
 
 ### `python main.py` fails during startup
 
-Run the command from the repository root and inspect the first traceback. Verify that dependencies are installed and that runtime storage initialization can create the configured directories/files.
+Run the command from the repository root and inspect the first traceback. Verify dependencies are installed and runtime storage initialization can create the configured directories/files.
 
 ### Tests fail because of stale data
 
@@ -280,28 +239,17 @@ Check whether the consumer expects a `Config` class attribute or one of the modu
 
 Look for a common root cause before fixing failures individually. Typical causes include a changed constructor signature, package export, repository contract, configuration path, or service API.
 
-## 19. Development vs. Production
+## 18. Development vs. Production
 
 This guide primarily describes development/test installation. Production deployment additionally requires appropriate secret management, filesystem permissions, runtime identity, backup/recovery, logging retention, data protection, network exposure controls, authentication configuration, monitoring, and deployment-specific configuration.
 
-These concerns should be handled by the deployment environment without weakening application validation.
+## 19. Security Considerations
 
-## 20. Security Considerations
-
-Never commit:
-
-- Passwords
-- API keys
-- Secret keys
-- Production credentials
-- Private certificates or keys
-- Production customer data
-- Production transaction data
-- Sensitive `.env` files
+Never commit passwords, API keys, secret keys, production credentials, private certificates or keys, production customer data, production transaction data, or sensitive `.env` files.
 
 Because the application uses CSV persistence, operating-system filesystem permissions are an important part of protecting stored banking data.
 
-## 21. Reproducibility Checklist
+## 20. Reproducibility Checklist
 
 - [ ] Correct Python version installed
 - [ ] Repository cloned
@@ -310,43 +258,40 @@ Because the application uses CSV persistence, operating-system filesystem permis
 - [ ] `pip check` passes
 - [ ] Configuration imports successfully
 - [ ] Runtime storage can be initialized
-- [ ] Reporting tests pass
 - [ ] Integration tests pass
 - [ ] E2E tests pass
 - [ ] Full test suite passes
 - [ ] `python main.py` starts the CLI
+- [ ] Customer creation can be initiated
+- [ ] Account opening can be initiated
 - [ ] `python main.py` exits cleanly through menu option 0
 - [ ] No secrets or runtime banking data are committed
 
-## 22. Current Validation Baseline
+## 21. Current Validation Baseline
 
 ```text
 Python 3.13.9
 pytest 8.4.2
 
-pytest tests/reporting
-70 passed in 0.55s
-
-pytest
-1,439 passed in 10.35s
+pytest -x
+1,419 passed in 9.39s
 ```
 
-The executable entry point has additionally been covered by the integration test `tests/integration/test_cli_entry_point.py`. The complete 1,439-test baseline above predates the entry-point change and should be rerun locally after pulling the new commits.
+The executable entry point is additionally covered by `tests/integration/test_cli_entry_point.py`. A manual CLI workflow has also been confirmed successfully for customer creation and subsequent account workflow.
 
-Future dependency, configuration, or startup changes should be validated against a fresh environment where practical and should preserve or explicitly update the regression baseline.
-
-## 23. Related Documentation
+## 22. Related Documentation
 
 - [`README.md`](../../README.md) — project overview
 - [`User Guide`](../user/USER_GUIDE.md) — user workflows
 - [`Architecture Guide`](../architecture/ARCHITECTURE_GUIDE.md) — architecture and design
 - [`Developer Guide`](../developer/DEVELOPER_GUIDE.md) — development practices
-- `docs/api/API_REFERENCE.md` — API reference
-- `docs/diagrams/CLASS_DIAGRAMS.md` — class diagrams
-- `docs/diagrams/SEQUENCE_DIAGRAMS.md` — sequence diagrams
+- [`API Reference`](../api/API_REFERENCE.md) — API reference
+- [`Class Diagrams`](../diagrams/CLASS_DIAGRAMS.md) — class diagrams
+- [`Sequence Diagrams`](../diagrams/SEQUENCE_DIAGRAMS.md) — sequence diagrams
+- [`Documentation Validation`](../validation/DOCUMENTATION_VALIDATION.md) — documentation consistency baseline
 
-## 24. Source of Truth
+## 23. Source of Truth
 
 Installation commands, dependency declarations, configuration names, and startup procedures must remain synchronized with the repository.
 
-When this guide conflicts with implementation, `requirements.txt`, `config.py`, startup/bootstrap code, and automated tests are authoritative. Update this guide as part of the same change that alters installation or startup behavior.
+When this guide conflicts with implementation, `requirements.txt`, `config.py`, startup/bootstrap code, `main.py`, and automated tests are authoritative. Update this guide as part of the same change that alters installation or startup behavior.

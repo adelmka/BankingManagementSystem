@@ -56,7 +56,7 @@ class TransactionService(BaseService[Transaction]):
         raise EntityNotFoundError("Transaction not found.")
 
     def transaction_exists(self, transaction_number: str) -> bool:
-        return self._repository.exists_transaction_number(transaction_number)
+        return self._repository.transaction_exists(transaction_number)
 
     def all_transactions(self) -> list[Transaction]:
         return list(self._repository)

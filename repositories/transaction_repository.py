@@ -253,3 +253,11 @@ class TransactionRepository(
         """Return the transaction-specific repository summary."""
         return f"TransactionRepository(transactions={self.count})"
 
+    def __repr__(self) -> str:
+        """Return a transaction-specific developer representation."""
+        return (
+            f"TransactionRepository("
+            f"entity_type={self.ENTITY_CLASS.__name__}, "
+            f"count={self.count}, "
+            f"file='{self.CSV_FILE}')"
+        )

@@ -40,7 +40,7 @@ class TransactionService(BaseService[Transaction]):
         self._validate(transaction)
         try:
             with self._operation_scope():
-                self._repository.add(transaction)
+                self._repository.add_transaction(transaction)
         except Exception as ex:
             self._operation_failed("record_transaction", ex)
             raise

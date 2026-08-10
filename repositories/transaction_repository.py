@@ -248,3 +248,8 @@ class TransactionRepository(
         raise UnsupportedOperationError(
             "Transactions are immutable and cannot be deleted."
         )
+
+    def __str__(self) -> str:
+        """Return the transaction-specific repository summary."""
+        return f"TransactionRepository(transactions={self.count})"
+

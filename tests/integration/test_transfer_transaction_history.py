@@ -1,7 +1,6 @@
 """Regression tests for internal transfer transaction recording and lookup."""
 
 from decimal import Decimal
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from models.transaction import Transaction
@@ -83,7 +82,10 @@ def test_account_transaction_history_includes_both_transfer_participants():
         initiated_by="SYSTEM",
         description="Testing transfer",
     )
-    transaction_repository.__iter__.return_value = iter([transaction])
+
+    # The repository's iterator must be fresh for each service query.
+    # A one-shot iterator would be exhausted after the source-account lookup.
+    transaction_repository.__iter__.side_effect = lambda: iter([transaction])
 
     service = TransactionService(
         transaction_repository=transaction_repository,

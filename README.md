@@ -4,21 +4,15 @@ A Python-based Banking Management System (BMS) implementing core retail-banking 
 
 ## Project Status
 
-**Current status: Functionally validated and documentation-complete**
+**Current status: Functionally validated and documentation-synchronized**
 
-The current local test-suite baseline contains **1,439 tests**, and the complete suite passes:
-
-```text
-1,439 passed in 10.35s
-```
-
-The dedicated reporting suite also passes independently:
+The current local test-suite baseline contains **1,419 tests**, and the complete suite passes:
 
 ```text
-70 passed in 0.55s
+1,419 passed in 9.39s
 ```
 
-These results represent the current local validation baseline. The documentation set has now been completed and cross-checked against the repository structure and implementation.
+The latest manual validation also confirmed the primary CLI workflow for customer creation and account opening/operations. The test baseline above is the current supplied local validation evidence.
 
 ## Key Capabilities
 
@@ -81,27 +75,11 @@ BankingManagementSystem/
 └── docs/                # Project documentation
 ```
 
-The exact implementation remains the authoritative source for module names and APIs. Documentation is derived from the validated current codebase rather than from an earlier design draft.
+The exact implementation remains the authoritative source for module names and APIs.
 
 ## Configuration
 
-Application configuration is centralized in `config.py` through the `Config` class and environment-specific configuration classes. The application supports development, testing, and production configuration profiles.
-
-Environment-specific settings can be supplied through a `.env` file. Sensitive or environment-specific values should not be committed to source control.
-
-Important configuration areas include:
-
-- Application name and version
-- Host and port
-- Bank identification
-- Currency
-- Data, log, backup, static, template, and documentation directories
-- CSV data-file locations
-- Interest rates
-- Banking fees
-- Authentication settings
-- Logging
-- Reporting and pagination settings
+Application configuration is centralized in `config.py` through the `Config` class and environment-specific configuration classes. Important configuration areas include application identity, bank identification, currency, data and log directories, CSV data-file locations, interest rates, banking fees, authentication, logging, and reporting settings.
 
 ## Installation
 
@@ -113,42 +91,47 @@ Important configuration areas include:
 
 ### Setup
 
-Clone the repository and enter the project directory:
-
-```bash
+```powershell
 git clone https://github.com/adelmka/BankingManagementSystem.git
 cd BankingManagementSystem
-```
-
-Create and activate a virtual environment. For Windows PowerShell:
-
-```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-```
-
-Install the dependencies:
-
-```powershell
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-Detailed installation procedures are maintained in [`docs/installation/INSTALLATION_GUIDE.md`](docs/installation/INSTALLATION_GUIDE.md).
+Detailed procedures are maintained in [`docs/installation/INSTALLATION_GUIDE.md`](docs/installation/INSTALLATION_GUIDE.md).
 
 ## Starting the Application
 
-From the repository root, start the executable BMS command-line application with:
+From the repository root:
 
 ```powershell
 python main.py
 ```
 
-`main.py` is intentionally a thin executable composition root. It starts the existing application bootstrap, initializes runtime storage through the existing startup path, obtains the configured `BankService`, and presents the interactive console using the existing `MenuRenderer` and `InputHandler` components.
+`main.py` is the executable composition root. It starts the existing application bootstrap, obtains the configured `BankService`, creates the CLI command adapters, and presents the interactive console using `MenuRenderer` and `InputHandler`.
 
-The application can be terminated through the **Exit** menu option or with `Ctrl+C`.
+The current main menu is:
 
-The executable entry point is covered by an integration test in `tests/integration/test_cli_entry_point.py`.
+```text
+1. Create customer
+2. List customers
+3. Open account
+4. List accounts
+5. Deposit funds
+6. Withdraw funds
+7. Transfer between accounts
+8. View account transactions
+9. Customer statistics
+10. Account statistics
+11. Bank statistics
+0. Exit
+```
+
+The application can be terminated through **0 — Exit** or with `Ctrl+C`.
+
+The executable entry point is covered by `tests/integration/test_cli_entry_point.py`.
 
 ## Running Tests
 
@@ -158,10 +141,10 @@ Run the complete test suite from the repository root:
 pytest
 ```
 
-Run the reporting tests independently:
+Latest supplied validation:
 
-```powershell
-pytest tests/reporting
+```text
+1,419 passed in 9.39s
 ```
 
 Useful targeted commands include:
@@ -174,66 +157,33 @@ pytest tests/test_customer_service.py -v
 pytest tests/test_transaction_service.py -v
 ```
 
-The full test suite is the primary functional validation baseline.
-
 ## Test Coverage Areas
 
-The test suite currently covers:
-
-- Domain models and entities
-- Value objects
-- Repositories and persistence
-- Services and business workflows
-- CLI commands and application components
-- Dependency management and bootstrap/startup behavior
-- Reporting and export functionality
-- Integration workflows
-- End-to-end banking workflows
+The test suite covers domain models, value objects, repositories and persistence, services and business workflows, CLI commands and application components, dependency management and startup, reporting/export functionality, integration workflows, and end-to-end banking workflows.
 
 ## Reporting
 
-The reporting subsystem is independently validated by 70 passing tests covering:
-
-- Account reports
-- Bank reports
-- Customer reports
-- Transaction reports
-- Report generation
-- Export service functionality
+The reporting subsystem is independently covered by the reporting tests in `tests/reporting/` and includes account, bank, customer, and transaction reporting, report generation, and export functionality.
 
 ## Documentation
 
-The documentation set is complete and is organized as follows:
-
 | Document | Location | Status |
 |---|---|---|
-| README | `README.md` | Complete |
-| Architecture Guide | `docs/architecture/ARCHITECTURE_GUIDE.md` | Complete |
-| User Guide | `docs/user/USER_GUIDE.md` | Complete |
-| Developer Guide | `docs/developer/DEVELOPER_GUIDE.md` | Complete |
-| Installation Guide | `docs/installation/INSTALLATION_GUIDE.md` | Complete |
-| API Reference | `docs/api/API_REFERENCE.md` | Complete |
-| Class Diagrams | `docs/diagrams/CLASS_DIAGRAMS.md` | Complete |
-| Sequence Diagrams | `docs/diagrams/SEQUENCE_DIAGRAMS.md` | Complete |
-| Documentation Validation | `docs/validation/DOCUMENTATION_VALIDATION.md` | Complete |
+| README | `README.md` | Synchronized |
+| Architecture Guide | `docs/architecture/ARCHITECTURE_GUIDE.md` | Current |
+| User Guide | `docs/user/USER_GUIDE.md` | Synchronized |
+| Developer Guide | `docs/developer/DEVELOPER_GUIDE.md` | Synchronized |
+| Installation Guide | `docs/installation/INSTALLATION_GUIDE.md` | Synchronized |
+| API Reference | `docs/api/API_REFERENCE.md` | Current |
+| Class Diagrams | `docs/diagrams/CLASS_DIAGRAMS.md` | Current |
+| Sequence Diagrams | `docs/diagrams/SEQUENCE_DIAGRAMS.md` | Current |
+| Documentation Validation | `docs/validation/DOCUMENTATION_VALIDATION.md` | Synchronized |
 
 All documentation is intended to describe the implementation that exists in the repository. It does not introduce architectural changes or document deferred functionality as implemented.
 
 ## Design Approach
 
-The project uses object-oriented programming and separation of responsibilities across the application. The documentation set describes the implemented architecture, including:
-
-- Encapsulation
-- Abstraction
-- Inheritance
-- Polymorphism
-- Composition and collaboration between domain objects
-- Repository-based persistence
-- Service-layer business logic
-- Application/CLI orchestration
-- Reporting separation
-- Centralized configuration
-- Domain-specific exception handling
+The project uses object-oriented programming and separation of responsibilities across the application, including encapsulation, abstraction, inheritance, polymorphism, composition, repository-based persistence, service-layer business logic, application/CLI orchestration, reporting separation, centralized configuration, and domain-specific exception handling.
 
 ## Data Persistence
 
@@ -255,20 +205,20 @@ The application configuration currently identifies the application version as **
 
 ## License
 
-No project license has been specified in the repository documentation at this stage. Licensing information should be added when a project license is formally selected.
+No project license has been specified in the repository documentation at this stage.
 
 ## Documentation Roadmap
 
-The documentation phase is complete:
+The documentation phase is complete and synchronized with the current implementation:
 
-1. README — project entry point and documentation index
+1. README — project entry point
 2. Architecture Guide — architecture, layers, responsibilities, and design decisions
-3. User Guide — operational workflows
+3. User Guide — current executable CLI workflows
 4. Developer Guide — development and extension guidance
 5. Installation Guide — environment and setup procedures
-6. API Reference — public classes, services, repositories, and interfaces
+6. API Reference — public API reference
 7. Class Diagrams — static system/domain relationships
 8. Sequence Diagrams — major runtime workflows
 9. Documentation Validation — consistency check against the current source and test baseline
 
-The next project activity can be the independent final project audit, if desired.
+The next activity, if desired, is the previously deferred independent final project audit.

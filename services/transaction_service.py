@@ -64,11 +64,10 @@ class TransactionService(BaseService[Transaction]):
         """
         Return transactions that affect the specified account.
 
-        The transaction repository's account query is the authoritative
-        lookup for the account-side transaction history. Internal and
-        external transfers also carry a destination account, so transfer
-        records where this account is the destination are added to that
-        result as well.
+        The repository's normal account query remains the primary lookup for
+        ordinary transactions. Transfer transactions use source_account and
+        destination_account instead of account_number, so the repository's
+        transaction stream is also inspected to include both participants.
         """
         self.account(account_number)
         normalized = account_number.strip().upper()
@@ -78,17 +77,30 @@ class TransactionService(BaseService[Transaction]):
         )
         known = {id(transaction) for transaction in transactions}
 
-        for transaction in self.all_transactions():
+        # Use the repository iterator directly rather than routing through
+        # all_transactions(). This preserves a fresh iterator supplied by
+        # repository implementations and by test doubles for each lookup.
+        for transaction in self._repository.__iter__():
+            source_account = getattr(
+                transaction,
+                "source_account",
+                None,
+            )
             destination_account = getattr(
                 transaction,
                 "destination_account",
                 None,
             )
-            if (
+
+            affects_account = (
+                isinstance(source_account, str)
+                and source_account.strip().upper() == normalized
+            ) or (
                 isinstance(destination_account, str)
                 and destination_account.strip().upper() == normalized
-                and id(transaction) not in known
-            ):
+            )
+
+            if affects_account and id(transaction) not in known:
                 transactions.append(transaction)
                 known.add(id(transaction))
 
@@ -144,7 +156,7 @@ class TransactionService(BaseService[Transaction]):
         transaction = self.get_transaction(transaction_number)
 
         # Standard transactions historically expose ``account_number`` while
-        # transfer transactions expose ``source_account``.  Keep the public
+        # transfer transactions expose ``source_account``. Keep the public
         # summary contract stable and support both transaction shapes.
         account_number = getattr(transaction, "account_number", None)
         if account_number is None:

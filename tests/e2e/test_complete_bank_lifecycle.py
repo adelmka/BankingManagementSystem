@@ -291,10 +291,8 @@ def test_application_restart(
 
     account_service.deposit("E2ESAV001", Money("500"))
 
-    # AccountService currently changes balances but deliberately does
-    # not persist Transaction entities. Record one explicitly through
-    # the supported TransactionService API so this test can verify the
-    # transaction persistence/reload contract without changing production code.
+    # AccountService records the deposit transaction. Record one additional
+    # transaction explicitly through the supported TransactionService API.
     transaction = Transaction(
         transaction_number="E2ETXN001",
         transaction_type=TransactionType.DEPOSIT,
@@ -312,13 +310,13 @@ def test_application_restart(
 
     assert customer_repo.find_by_customer_number("E2ELC001") is not None
     assert account_repo.find_by_account_number("E2ESAV001") is not None
-    assert len(list(transaction_repo)) == 1
+    assert len(list(transaction_repo)) == 2
 
     restarted_transaction_service = TransactionService(
         transaction_repository=transaction_repo,
         account_repository=account_repo,
     )
-    assert len(restarted_transaction_service.all_transactions()) == 1
+    assert len(restarted_transaction_service.all_transactions()) == 2
     assert restarted_transaction_service.get_transaction("E2ETXN001").amount.amount == Decimal("500.00")
 
 

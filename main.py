@@ -69,7 +69,7 @@ def _list_customers(application, renderer: MenuRenderer) -> None:
         (
             customer.customer_id,
             customer.full_name,
-            customer.customer_status.value,
+            getattr(customer.customer_status, "value", customer.customer_status),
         )
         for customer in customers
     )
@@ -84,7 +84,7 @@ def _account_type_display(account) -> str:
     """
 
     account_type = account.account_type
-    return getattr(account_type, "value", account_type)
+    return str(getattr(account_type, "value", account_type))
 
 
 def _list_accounts(application, renderer: MenuRenderer) -> None:
@@ -184,7 +184,11 @@ def _run_command(
         "1": command_adapters["customer"].create_customer,
         "2": lambda: _list_customers(application, renderer),
         "3": command_adapters["account"].create_account,
-        "4": lambda: _list_accounts(application, renderer),
+        # Account listing is owned by the AccountCommands adapter. Keeping
+        # this path on the adapter prevents the executable entry point from
+        # duplicating account presentation logic and ensures the same behavior
+        # is used by the CLI command tests and the interactive application.
+        "4": command_adapters["account"].list_accounts,
         "5": lambda: _deposit(application, input_handler, renderer),
         "6": lambda: _withdraw(application, input_handler, renderer),
         "7": lambda: _transfer(application, input_handler, renderer),

@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from cli.input_handler import InputHandler
 from cli.menu_renderer import MenuRenderer
+from models.value_objects.money import Money
 
 
 def test_input_handler_command_adapter_aliases():
@@ -15,7 +16,12 @@ def test_input_handler_command_adapter_aliases():
 
     with patch("builtins.input", side_effect=[" Adel ", "25.50", "y"]):
         assert handler.get_value("Name") == "Adel"
-        assert handler.get_money("Amount") == Decimal("25.50")
+
+        amount = handler.get_money("Amount")
+        assert isinstance(amount, Money)
+        assert amount.amount == Decimal("25.50")
+        assert amount.currency.value == "SAR"
+
         assert handler.get_confirmation("Continue") is True
 
 

@@ -6,7 +6,7 @@ File        : transaction_repository.py
 Description : Transaction Repository.
 
 Author      : Adel Alawiyat / ChatGPT
-Version     : 2.1.0
+Version     : 2.1.1
 Python      : 3.13+
 
 ===============================================================================
@@ -31,7 +31,6 @@ from utils.constants import (
 
 from exceptions import (
     EntityAlreadyExistsError,
-    EntityNotFoundError,
     UnsupportedOperationError,
 )
 
@@ -128,6 +127,24 @@ class TransactionRepository(
         """Return transactions matching the supplied transaction type."""
         return self.find_where(
             lambda transaction: transaction.transaction_type == transaction_type
+        )
+
+    def deposits(self) -> list[Transaction]:
+        """Return all deposit transactions."""
+        return self.find_by_type(TransactionType.DEPOSIT)
+
+    def withdrawals(self) -> list[Transaction]:
+        """Return all withdrawal transactions."""
+        return self.find_by_type(TransactionType.WITHDRAWAL)
+
+    def transfers(self) -> list[Transaction]:
+        """Return all internal and external transfer transactions."""
+        return self.find_where(
+            lambda transaction: transaction.transaction_type
+            in (
+                TransactionType.INTERNAL_TRANSFER,
+                TransactionType.EXTERNAL_TRANSFER,
+            )
         )
 
     def find_by_status(
@@ -231,7 +248,7 @@ class TransactionRepository(
             raise EntityAlreadyExistsError(
                 f"Transaction already exists: {entity.transaction_number}"
             )
-        result = super().add(entity)
+        super().add(entity)
         self.save()
         return entity
 

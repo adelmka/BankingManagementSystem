@@ -156,6 +156,34 @@ class TransactionRepository(
             lambda transaction: transaction.transaction_status == status
         )
 
+    def completed_transactions(self) -> list[Transaction]:
+        """Return all completed transactions."""
+        return self.find_by_status(TransactionStatus.COMPLETED)
+
+    def pending_transactions(self) -> list[Transaction]:
+        """Return all pending transactions."""
+        return self.find_by_status(TransactionStatus.PENDING)
+
+    def failed_transactions(self) -> list[Transaction]:
+        """Return all failed transactions."""
+        return self.find_by_status(TransactionStatus.FAILED)
+
+    def transaction_count(self) -> int:
+        """Return the total number of persisted transactions."""
+        return self.count
+
+    def completed_transaction_count(self) -> int:
+        """Return the number of completed transactions."""
+        return len(self.completed_transactions())
+
+    def pending_transaction_count(self) -> int:
+        """Return the number of pending transactions."""
+        return len(self.pending_transactions())
+
+    def failed_transaction_count(self) -> int:
+        """Return the number of failed transactions."""
+        return len(self.failed_transactions())
+
     def find_by_date_range(
         self,
         start_date: date,

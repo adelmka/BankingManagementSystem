@@ -2,9 +2,9 @@
 
 ## 1. Purpose
 
-This document records the final validation of the BMS documentation set completed in Phase 10I.
+This document records the Phase 10 documentation synchronization review for the BMS repository.
 
-The validation objective is to confirm that the planned documentation deliverables exist in the recommended locations, cross-reference one another consistently, describe the current implementation rather than a proposed redesign, and preserve the known functional-test baseline.
+The objective is to confirm that the documentation describes the current implementation, executable CLI, installation path, public architecture, and latest supplied functional-validation baseline.
 
 ## 2. Validation Scope
 
@@ -18,236 +18,163 @@ The review covered:
 - `docs/api/API_REFERENCE.md`
 - `docs/diagrams/CLASS_DIAGRAMS.md`
 - `docs/diagrams/SEQUENCE_DIAGRAMS.md`
-- Current application/bootstrap structure
-- Current domain/service/reporting structure used by the documentation
-- Document cross-references
-- Test-baseline statements
+- `main.py`
+- Application/bootstrap structure
+- Current CLI command adapters
+- Current service architecture
+- Current test-baseline evidence
 
-## 3. Required Deliverables
+## 3. Documentation Deliverables
 
-| Deliverable | Required location | Status |
+| Deliverable | Location | Status |
 |---|---|---|
-| README | `README.md` | PASS |
-| Architecture Guide | `docs/architecture/ARCHITECTURE_GUIDE.md` | PASS |
-| User Guide | `docs/user/USER_GUIDE.md` | PASS |
-| Developer Guide | `docs/developer/DEVELOPER_GUIDE.md` | PASS |
-| Installation Guide | `docs/installation/INSTALLATION_GUIDE.md` | PASS |
-| API Reference | `docs/api/API_REFERENCE.md` | PASS |
-| Class Diagrams | `docs/diagrams/CLASS_DIAGRAMS.md` | PASS |
-| Sequence Diagrams | `docs/diagrams/SEQUENCE_DIAGRAMS.md` | PASS |
-| Documentation Validation | `docs/validation/DOCUMENTATION_VALIDATION.md` | PASS |
+| README | `README.md` | SYNCHRONIZED |
+| Architecture Guide | `docs/architecture/ARCHITECTURE_GUIDE.md` | CURRENT |
+| User Guide | `docs/user/USER_GUIDE.md` | SYNCHRONIZED |
+| Developer Guide | `docs/developer/DEVELOPER_GUIDE.md` | SYNCHRONIZED |
+| Installation Guide | `docs/installation/INSTALLATION_GUIDE.md` | SYNCHRONIZED |
+| API Reference | `docs/api/API_REFERENCE.md` | CURRENT |
+| Class Diagrams | `docs/diagrams/CLASS_DIAGRAMS.md` | CURRENT |
+| Sequence Diagrams | `docs/diagrams/SEQUENCE_DIAGRAMS.md` | CURRENT |
+| Documentation Validation | `docs/validation/DOCUMENTATION_VALIDATION.md` | SYNCHRONIZED |
 
-## 4. Recommended Documentation Structure
+## 4. Current Executable Entry Point
 
-The resulting structure is:
+The current executable entry point is:
 
-```text
-BankingManagementSystem/
-├── README.md
-└── docs/
-    ├── architecture/
-    │   └── ARCHITECTURE_GUIDE.md
-    ├── user/
-    │   └── USER_GUIDE.md
-    ├── developer/
-    │   └── DEVELOPER_GUIDE.md
-    ├── installation/
-    │   └── INSTALLATION_GUIDE.md
-    ├── api/
-    │   └── API_REFERENCE.md
-    ├── diagrams/
-    │   ├── CLASS_DIAGRAMS.md
-    │   └── SEQUENCE_DIAGRAMS.md
-    └── validation/
-        └── DOCUMENTATION_VALIDATION.md
+```powershell
+python main.py
 ```
 
-The structure separates operational, architectural, developer, API, diagram, installation, and validation documentation without introducing changes to the application architecture.
+`main.py` is a thin composition root. It starts the existing application startup path, creates `MenuRenderer` and `InputHandler`, obtains the CLI command adapters from the application, and dispatches the current main-menu operations.
 
-## 5. Repository Cross-Reference Validation
-
-The documentation set consistently uses relative references between the documentation areas and the project root.
-
-Expected relationships include:
+The current executable menu is:
 
 ```text
-README
-  ├── Architecture Guide
-  ├── User Guide
-  ├── Developer Guide
-  ├── Installation Guide
-  ├── API Reference
-  ├── Class Diagrams
-  ├── Sequence Diagrams
-  └── Documentation Validation
+1. Create customer
+2. List customers
+3. Open account
+4. List accounts
+5. Deposit funds
+6. Withdraw funds
+7. Transfer between accounts
+8. View account transactions
+9. Customer statistics
+10. Account statistics
+11. Bank statistics
+0. Exit
 ```
 
-The individual guides also reference the related documentation using paths relative to their own directory.
+This menu is now the authoritative user-facing CLI description for documentation purposes.
 
-## 6. Source-Alignment Review
+## 5. CLI and Service Alignment
 
-The documentation was reviewed against the current implementation structure and the previously validated source areas.
+The documentation was synchronized with the current command/service boundaries.
 
-### Application startup
+Customer creation is delegated to the current `CustomerCommands` adapter, which constructs the domain `Customer` and registers it through `CustomerService`.
 
-The documentation correctly describes startup as a staged process involving bootstrap, storage initialization/validation, application construction, and dependency composition. The current `Bootstrap.initialize()` initializes storage, validates storage, and constructs `Application`. `Application` constructs the dependency graph and exposes the bank façade.
+Account opening is delegated to the current `AccountCommands` adapter, which collects account-opening data, constructs the appropriate account domain object, and delegates persistence/business processing to `AccountService`.
 
-### Service architecture
+Financial operations in `main.py` use the existing banking façade and the domain `Money` value object for monetary amounts.
 
-The documentation consistently identifies the principal service responsibilities around customer, account, transaction, and bank operations. It maintains the service/repository separation used by the implementation.
+The CLI documentation no longer describes the old hierarchical menu structure that is not rendered by the executable `main.py`.
 
-### Persistence
+## 6. Persistence and Architecture Alignment
 
-The documentation consistently identifies CSV as the implemented persistence mechanism and does not claim that a relational database is currently required.
+The documentation consistently identifies CSV as the implemented persistence mechanism.
 
-### Reporting
+The service/repository separation remains documented, with the application dependency container constructing repositories, services, and the `BankService` façade.
 
-The documentation consistently separates reporting from core banking business logic and identifies customer, account, transaction, bank, report-generation, and export functionality.
+No documentation change introduces a database, external-bank integration, or other architectural capability that is not established by the current implementation.
 
-### CLI
+## 7. Test-Baseline Synchronization
 
-The User Guide documents the current top-level operational areas and explicitly avoids treating the menu label for external-bank transfer as proof of an external banking integration.
+The previous documentation baseline of 1,439 full-suite tests was stale.
 
-### Object-oriented design
-
-The architecture and class documentation describe the implemented use of abstraction, inheritance, polymorphism, encapsulation, and composition without requiring an architectural redesign.
-
-## 7. API Documentation Review
-
-The API Reference is intentionally a maintained high-level reference rather than an automatically generated API dump.
-
-The following public areas are represented:
-
-- Core domain entities
-- Account hierarchy
-- Value objects
-- Customer service
-- Account service
-- Transaction service
-- Repository layer
-- Dependency container
-- Reporting model
-- CLI boundary
-- Exceptions
-
-Where an exact implementation signature was not sufficiently established during documentation preparation, the reference avoids inventing a signature and directs developers to the current source as authoritative.
-
-## 8. Diagram Review
-
-### Class diagrams
-
-The class-diagram document represents static relationships such as inheritance, composition, and service/repository collaboration. Mermaid is used so the diagrams remain text-based and version-controlled.
-
-### Sequence diagrams
-
-The sequence-diagram document represents the major runtime workflows:
-
-- Startup
-- Application health/shutdown
-- Customer registration
-- Account opening
-- Deposit
-- Withdrawal
-- Internal transfer
-- Transaction history
-- Reporting/export
-- CSV persistence
-- Error propagation
-- A combined daily banking workflow
-
-The diagrams intentionally avoid introducing unsupported external banking integrations or deployment infrastructure.
-
-## 9. Installation Documentation Review
-
-The Installation Guide correctly identifies the validated development environment as Windows with Python 3.13.9 and pytest 8.4.2 and documents the dependency installation process through `requirements.txt`.
-
-It also avoids inventing a `python main.py` entry point. Instead, it directs the user to the current repository startup path. This is important because startup/bootstrap behavior is implemented under the application package rather than being assumed from a generic Python project convention.
-
-## 10. Test-Baseline Validation
-
-The user-provided final local execution established the following baseline:
+The latest supplied local execution established:
 
 ```text
-pytest tests/reporting
-70 passed in 0.55s
+pytest -x
 
-pytest
-1,439 passed in 10.35s
+1,419 passed in 9.39s
 ```
 
-These results are recorded consistently throughout the documentation.
+This is now the documented regression baseline in the README, Developer Guide, Installation Guide, User Guide, and this validation document.
 
-This documentation-validation phase does **not** claim to have independently executed the user's local Windows test environment. The test results above are the supplied project validation evidence and are treated as the current baseline.
+The test run was supplied from the user's local Windows/Python environment. This document does not claim that GitHub independently executed the local test suite.
 
-## 11. Documentation Accuracy Rules Applied
+## 8. Manual CLI Validation Evidence
 
-The following rules were applied throughout Phase 10:
+The user also confirmed successful manual execution of the primary workflow involving:
 
-1. Document implemented behavior rather than planned architecture.
-2. Do not invent unsupported integrations.
-3. Preserve the existing architecture.
-4. Treat source code and tests as authoritative.
-5. Keep public API descriptions synchronized with current code.
-6. Keep installation instructions consistent with the repository.
-7. Use relative documentation links where appropriate.
-8. Record the known test baseline without implying that documentation itself executes tests.
+1. Creating a customer through the executable CLI.
+2. Receiving a generated customer ID.
+3. Opening an account for the created customer.
+4. Continuing through the account workflow successfully after the monetary-input/domain-object boundary was corrected.
 
-## 12. Findings and Corrections
+This manual evidence complements, but does not replace, automated regression testing.
 
-### Finding 1 — README documentation status was stale
+## 9. Documentation Corrections Applied
 
-The README previously listed the documentation deliverables as `Planned` even though Phases 10B–10H had been completed.
+### Correction 1 — Full-suite baseline
 
-**Resolution:** Updated the README to mark the documentation set as complete and added the validation document to the documentation index.
+Changed all synchronized documentation from the obsolete **1,439 tests** baseline to the current supplied **1,419 passed** baseline.
 
-### Finding 2 — README roadmap was no longer current
+### Correction 2 — Executable startup
 
-The README roadmap described the documentation work as future work.
+Documentation now consistently identifies `python main.py` as the executable CLI startup command.
 
-**Resolution:** Updated the roadmap to show the completed sequence and the final documentation-validation phase.
+### Correction 3 — Main menu
 
-### Finding 3 — Startup documentation must not assume `main.py`
+The User Guide and README now document the actual current `main.py` menu rather than the older hierarchical menu definition.
 
-A generic Python startup command would have been misleading because the current project uses application bootstrap/startup components.
+### Correction 4 — CLI architecture
 
-**Resolution:** Installation and User documentation explicitly avoid assuming an unsupported entry-point filename.
+The Developer Guide now identifies `main.py` as the executable composition root and documents its use of the existing command adapters, `InputHandler`, and `MenuRenderer`.
 
-### Finding 4 — External-bank transfer wording
+### Correction 5 — Installation verification
 
-The CLI exposes an external-bank transfer menu option, but a menu label alone does not establish an external banking integration.
+The Installation Guide now uses the current executable path and current test baseline and includes customer/account first-run verification.
 
-**Resolution:** The User Guide explicitly qualifies this capability and avoids documenting an unsupported integration.
+### Correction 6 — External-bank wording
 
-## 13. Final Validation Matrix
+The current executable menu exposes internal transfer between accounts. The synchronized documentation does not claim an external-bank integration that is not established by the current executable implementation.
+
+## 10. Final Validation Matrix
 
 | Area | Result | Notes |
 |---|---|---|
-| Documentation files | PASS | All planned deliverables present in recommended directories |
-| Directory structure | PASS | Consistent separation by documentation purpose |
-| README index | PASS | Updated to completed status |
-| Architecture consistency | PASS | Layering and composition align with current implementation |
-| User workflows | PASS | CLI-oriented workflows documented without unsupported claims |
-| Developer guidance | PASS | Testing and extension guidance matches project structure |
-| Installation guidance | PASS | Windows/Python development baseline documented |
-| API reference | PASS | Principal public APIs documented; source remains authoritative |
-| Class diagrams | PASS | Static relationships documented in Mermaid |
-| Sequence diagrams | PASS | Principal runtime workflows documented |
-| Cross-references | PASS | Relative documentation references follow the recommended structure |
-| Test baseline | PASS | 1,439 full-suite and 70 reporting tests recorded from supplied execution |
-| Architecture preservation | PASS | Documentation work introduces no production architecture changes |
+| Documentation files | PASS | Required documentation files are present |
+| README | PASS | Current baseline and startup path synchronized |
+| User Guide | PASS | Current executable menu and workflows documented |
+| Developer Guide | PASS | Current CLI composition and test baseline documented |
+| Installation Guide | PASS | Current startup and validation procedure documented |
+| Architecture Guide | PASS | Layering and composition remain aligned |
+| API Reference | PASS | Public areas remain documented; source is authoritative |
+| Class Diagrams | PASS | Static relationships remain documented |
+| Sequence Diagrams | PASS | Principal runtime workflows remain documented |
+| Cross-references | PASS | Documentation paths are consistent |
+| Test baseline | PASS | 1,419 passed in supplied latest full-suite execution |
+| Manual workflow | PASS | Customer/account CLI workflow manually confirmed |
+| Architecture preservation | PASS | Documentation changes do not alter production architecture |
 
-## 14. Phase 10 Conclusion
+## 11. Phase 10 Conclusion
 
-**Phase 10 — Documentation is complete.**
+**Phase 10 documentation synchronization is complete.**
 
-The required documentation deliverables have been created, organized under `docs/`, cross-referenced, reviewed against the current repository structure, and aligned with the known functional validation baseline.
+The documentation now reflects the current executable entry point, current main menu, current CLI/service boundaries, and latest supplied regression baseline.
 
-The final documentation set is suitable as the project's maintained documentation baseline.
+The authoritative functional evidence is:
 
-The next activity, if resumed, should be the previously deferred **independent final project audit**, not another documentation-generation phase.
+```text
+pytest -x
+1,419 passed in 9.39s
+```
 
-## 15. Validation Limitation
+The next activity, if resumed, should be the previously deferred independent final project audit rather than another documentation-generation phase.
 
-This document validates repository/documentation consistency using the available GitHub source and the test results supplied from the local development environment. It is not a substitute for a fresh execution of `pytest` on the developer's workstation.
+## 12. Validation Limitation
 
-A future CI workflow can provide independently reproducible test evidence for each documentation or production-code change.
+This document validates documentation consistency against the current GitHub source and the user's supplied local test/manual-validation evidence. It is not a substitute for independently executing the test suite on the developer workstation or in CI.
+
+Future production-code changes should update affected documentation and establish a fresh regression baseline.

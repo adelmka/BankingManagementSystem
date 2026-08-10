@@ -64,19 +64,35 @@ class TransactionService(BaseService[Transaction]):
         """
         Return transactions that affect the specified account.
 
-        Transfers contain both source_account and destination_account,
-        so both sides of an internal transfer must appear in either
-        account's transaction history.
+        The transaction repository's account query is the authoritative
+        lookup for the account-side transaction history. Internal and
+        external transfers also carry a destination account, so transfer
+        records where this account is the destination are added to that
+        result as well.
         """
         self.account(account_number)
         normalized = account_number.strip().upper()
 
-        return [
-            transaction
-            for transaction in self.all_transactions()
-            if transaction.source_account.strip().upper() == normalized
-            or transaction.destination_account.strip().upper() == normalized
-        ]
+        transactions = list(
+            self._repository.find_by_account(account_number)
+        )
+        known = {id(transaction) for transaction in transactions}
+
+        for transaction in self.all_transactions():
+            destination_account = getattr(
+                transaction,
+                "destination_account",
+                None,
+            )
+            if (
+                isinstance(destination_account, str)
+                and destination_account.strip().upper() == normalized
+                and id(transaction) not in known
+            ):
+                transactions.append(transaction)
+                known.add(id(transaction))
+
+        return transactions
 
     def customer_transactions(self, customer_number: str) -> list[Transaction]:
         return self._repository.find_by_customer(customer_number)

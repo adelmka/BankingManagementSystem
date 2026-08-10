@@ -142,9 +142,17 @@ class TransactionService(BaseService[Transaction]):
 
     def transaction_summary(self, transaction_number: str) -> dict[str, object]:
         transaction = self.get_transaction(transaction_number)
+
+        # Standard transactions historically expose ``account_number`` while
+        # transfer transactions expose ``source_account``.  Keep the public
+        # summary contract stable and support both transaction shapes.
+        account_number = getattr(transaction, "account_number", None)
+        if account_number is None:
+            account_number = getattr(transaction, "source_account", None)
+
         return {
             "transaction_number": transaction.transaction_number,
-            "account_number": transaction.source_account,
+            "account_number": account_number,
             "transaction_type": transaction.transaction_type.value,
             "amount": transaction.amount,
             "currency": transaction.amount.currency,

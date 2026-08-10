@@ -69,6 +69,14 @@ class TransactionRepository(
             ) == transaction_number
         )
 
+    def get_or_raise(self, transaction_number: str) -> Transaction:
+        """Return a transaction by its business transaction number."""
+        transaction = self.find_by_transaction_number(transaction_number)
+        if transaction is None:
+            from exceptions import EntityNotFoundError
+            raise EntityNotFoundError("Transaction not found.")
+        return transaction
+
     def exists_transaction_number(
         self,
         transaction_number: str,

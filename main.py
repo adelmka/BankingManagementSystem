@@ -75,6 +75,18 @@ def _list_customers(application, renderer: MenuRenderer) -> None:
     )
 
 
+def _account_type_display(account) -> str:
+    """Return the account type for CLI display.
+
+    Account type values may be represented by the domain enum or by their
+    persisted string value. The CLI is a presentation boundary, so it accepts
+    either representation without imposing a conversion on the domain model.
+    """
+
+    account_type = account.account_type
+    return getattr(account_type, "value", account_type)
+
+
 def _list_accounts(application, renderer: MenuRenderer) -> None:
     accounts = application.bank.accounts()
 
@@ -86,7 +98,7 @@ def _list_accounts(application, renderer: MenuRenderer) -> None:
         (
             account.account_number,
             account.customer_id,
-            account.account_type.value,
+            _account_type_display(account),
             account.balance,
         )
         for account in accounts

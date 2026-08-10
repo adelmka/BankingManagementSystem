@@ -49,7 +49,7 @@ class TransactionService(BaseService[Transaction]):
         return transaction
 
     def get_transaction(self, transaction_number: str) -> Transaction:
-        return self._repository.find_by_transaction_number(transaction_number)
+        return self._repository.get_or_raise(transaction_number)
 
     def _raise_transaction_not_found(self) -> Transaction:
         from exceptions import EntityNotFoundError

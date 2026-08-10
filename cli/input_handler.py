@@ -25,11 +25,11 @@ Python      : 3.13+
 
 from __future__ import annotations
 
-from decimal import Decimal
-from decimal import InvalidOperation
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 
 from cli.menu_renderer import MenuRenderer
+from models.value_objects.money import Money
 
 
 class InputHandler:
@@ -134,13 +134,10 @@ class InputHandler:
         """Read an optional string value."""
         return self.read_string(prompt, required=False)
 
-    def get_money(self, prompt: str) -> Decimal:
-        """Read a monetary amount as a Decimal.
-
-        Domain command adapters are responsible for converting the validated
-        decimal into the Money value object required by the domain layer.
-        """
-        return self.read_decimal(prompt, minimum=Decimal("0"))
+    def get_money(self, prompt: str) -> Money:
+        """Read a validated monetary amount as the domain Money value object."""
+        amount = self.read_decimal(prompt, minimum=Decimal("0"))
+        return Money(amount)
 
     def get_confirmation(self, prompt: str) -> bool:
         """Compatibility alias for confirmation input."""

@@ -77,6 +77,13 @@ class TransactionRepository(
         """Determine whether a transaction number exists."""
         return self.find_by_transaction_number(transaction_number) is not None
 
+    def transaction_exists(
+        self,
+        transaction_number: str,
+    ) -> bool:
+        """Compatibility alias for checking transaction-number existence."""
+        return self.exists_transaction_number(transaction_number)
+
     def find_by_account(
         self,
         account_number: str,
@@ -85,7 +92,7 @@ class TransactionRepository(
         Return all transactions involving an account.
 
         An account can participate in a transaction either as the source
-        account or as the destination account.  Transaction intentionally
+        account or as the destination account. Transaction intentionally
         does not expose a single ``account_number`` attribute because an
         internal transfer has two account participants.
         """
